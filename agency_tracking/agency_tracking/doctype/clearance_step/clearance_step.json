@@ -14,6 +14,7 @@
   "status",
   "date_started",
   "date_completed",
+  "completed_by",
   "payment_sec",
   "reference_no",
   "amount",
@@ -76,6 +77,14 @@
    "fieldname": "date_completed",
    "fieldtype": "Date",
    "label": "Date Completed"
+  },
+  {
+   "description": "Step 13: needed for per-staff performance reporting (\"the same breakdown per individual staff member\") — not captured anywhere else, since the ToDo that tracked assignment is closed by the time the step completes.",
+   "fieldname": "completed_by",
+   "fieldtype": "Link",
+   "label": "Completed By",
+   "options": "User",
+   "read_only": 1
   },
   {
    "fieldname": "payment_sec",

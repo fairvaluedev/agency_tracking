@@ -34,6 +34,7 @@ def complete_clearance_step(clearance_step_name, reference_no=None, amount=None)
 	step = frappe.get_doc("Clearance Step", clearance_step_name)
 	step.status = "Complete"
 	step.date_completed = today()
+	step.completed_by = frappe.session.user
 	if reference_no:
 		step.reference_no = reference_no
 	if amount is not None:

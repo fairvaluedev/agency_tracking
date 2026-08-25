@@ -26,7 +26,7 @@ see `[[project-agency-tracking-gap-analysis]]` memory for why it wasn't reused).
 - [x] 10. Complaints
 - [x] 11. Notification pipeline
 - [x] 12. Chat
-- [ ] 13. Reporting/dashboards
+- [x] 13. Reporting/dashboards
 - [ ] 14. Frontend (SPA)
 - [ ] 15. Deployment hardening
 
@@ -662,3 +662,52 @@ with this build's running honesty standard about what's genuinely exercised (Ste
 plausible-looking. The realtime call itself is a real, correct Frappe API call; what's unverified
 is whether a real connected client actually receives it end-to-end, which needs a live socketio
 client to exercise (Step 14, when a real frontend exists to test against).
+
+## Step 13 — what was built
+
+`report_api.py`: `get_daily_work_report`, `get_staff_performance_report`,
+`get_complaint_aging_report` (Manager/Admin — "management visibility," business-workflow-srs.md
+Part 8), `get_financial_overview` (Admin-only specifically, per Part F — the Step 8 financial
+wall applies to reporting too, not just the raw ledger). `Clearance Step` gained `completed_by`
+— the one genuinely new field this step needed, since nothing previously captured who finished a
+step (the ToDo that tracked assignment is closed by completion time, per Step 7).
+
+**Built on existing audit data wherever the question was really "how many transitions of this
+kind happened," rather than adding new counters.** `Process Event` (Step 6) already records
+every `Placement` status change with a real timestamp and actor — `tickets_booked` and
+`departures_confirmed` (both the aggregate report and the per-staff breakdown) read directly
+from it. No duplicate logging, no new doctype needed for something the state machine already
+tracks faithfully.
+
+**Deliberately did not invent staff attribution where none exists.** Per-staff performance
+skips "medicals processed" specifically — nothing in this build records who recorded an
+Applicant's medical result, and fabricating an attribution (e.g. guessing from whoever last
+edited the record) would be presenting a guess as data. Flagged in the function's own docstring
+rather than silently omitted or faked.
+
+**Complaint aging returns individual per-complaint ages, not an average.** business-workflow-
+srs.md's own framing — "how many are still open and *for how long*... forgotten at the bottom of
+a list" — is explicitly about surfacing outliers, which a single averaged number would hide.
+Sorted oldest-first, same guarantee as Step 10's `list_unresolved_complaints`.
+
+**Real bug caught by the test suite, not inspection — the "plain date string as a Datetime
+BETWEEN bound" trap:** the first cut of every date-range filter passed `from_date`/`to_date`
+straight through as `["between", [from_date, to_date]]`. That's correct for `Date`-typed columns
+(`medical_issue_date`, `Clearance Step.date_completed`, `Commission Batch Request.settled_on`)
+but silently wrong for `Datetime`-typed ones (`CV Record.generated_on`, and the framework's own
+`creation` field used throughout for `Process Event`/`Applicant Transaction`): MySQL treats a
+bare date string as that day's midnight, so the upper bound of a same-day range excludes every
+row with a nonzero time — which is nearly all of them. A test that explicitly backdated a CV
+Record to `"2020-06-15 10:00:00"` and then queried the report for `2020-06-15` caught this
+directly (`cvs_created` came back `0`). Fixed with a `_day_range()` helper (`00:00:00` to
+`23:59:59`) applied specifically to the three `Datetime` fields, left alone for the genuinely
+`Date`-typed ones — this needed distinguishing per-field, not a single blanket fix, since
+applying `_day_range()` to an actual `Date` column would have been harmless but pointless, while
+missing it on any `Datetime` column would have silently under-reported forever.
+
+**Verified:** `bench migrate` clean; 9 new tests, every one backdated to a fixed historical date
+(`2020-06-15`, used by no other test in the suite) rather than "today" — a deliberate departure
+from this build's usual per-test-tag isolation strategy, because these functions `COUNT` across
+the *entire* shared test-run database by date range, so hundreds of other tests' same-day
+fixtures would otherwise inflate every assertion regardless of how uniquely each test's own
+records were tagged — 193/193 total across the app.
