@@ -1,20 +1,23 @@
 # Copyright (c) 2026, Agency and contributors
 # License: MIT. See LICENSE
 #
-# Immutable audit trail (Part B) — written only by state_machine.transition(), never edited
-# directly. See "Activity visibility" in addendum-post-spec-refinements.md for the query
-# conditions below (Finance Manager's "Applicant Transaction"-only scoping and Complaint
-# Manager's own scoping are inert until Step 8/Step 10 create those reference doctypes).
+# Immutable audit trail (Part B) — written by state_machine.transition() and
+# finance_api.void_transaction(), never edited directly. See "Activity visibility" in
+# addendum-post-spec-refinements.md for the query conditions below (Finance Manager's
+# "Applicant Transaction"-only scoping is now live as of Step 8; Complaint Manager's own
+# scoping is still inert until Step 10 creates the Complaint doctype).
 
 import frappe
 from frappe.model.document import Document
 
+EVENTS_REQUIRING_REMARKS = {"Override", "Voided"}
+
 
 class ProcessEvent(Document):
 	def validate(self):
-		if self.event_type == "Override" and not self.remarks:
+		if self.event_type in EVENTS_REQUIRING_REMARKS and not self.remarks:
 			frappe.throw(
-				"A written reason is required for an Override event.", frappe.ValidationError
+				f"A written reason is required for a {self.event_type} event.", frappe.ValidationError
 			)
 
 

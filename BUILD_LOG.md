@@ -21,7 +21,7 @@ see `[[project-agency-tracking-gap-analysis]]` memory for why it wasn't reused).
 - [x] 5. Corridor Definition engine (Saudi + Kuwait)
 - [x] 6. transition() + gate table + Manager Override (Medical 2 gate)
 - [x] 7. Clearance Step + ToDo permission scoping + LMIS→Ticketing→Departure auto-chain
-- [ ] 8. Financial ledger (income/expense, FX, accrual, batching, visibility wall)
+- [x] 8. Financial ledger (income/expense, FX, accrual, batching, visibility wall)
 - [ ] 9. Reconciliation tool
 - [ ] 10. Complaints
 - [ ] 11. Notification pipeline
@@ -367,3 +367,81 @@ specific step and nothing downstream depends on them yet; can be added without d
 step's work if/when needed. `Step Officer Mapping` has no seeded data (deliberately — it's real
 staff-to-role config, not reference data like Corridor Definition, so there's nothing genuine to
 seed yet).
+
+## Step 8 — what was built
+
+`Applicant Transaction` (the ledger — Part B: `transaction_type`, optional `placement`,
+`stage_logged_at`, `amount_original`/`currency_original`/`fx_rate`/`fx_rate_date`/`amount_birr`,
+`status` Active/Voided). `FX Rate` (a cache, not a live lookup — `currency`+`rate_date` →
+`rate_to_birr`). `Contractor` gained `batch_mode`/`batch_threshold`/`default_commission_rates`
+(child `Contractor Commission Rate`) at **field-level permlevel 1**, restricted to Finance
+Manager/Admin/System Manager via a second permission row per addendum's "field-level, not
+doctype-level" instruction — Manager can still edit the rest of Contractor but not this section.
+`Placement` gained `manual_commission_amount`/`manual_commission_currency` (Muayena's
+always-manual rate, Part A.1). `Commission Batch Request` + child `Commission Batch Item`.
+`Process Event.event_type` gained `Voided` (the addendum's own snippet uses it; `validate()`
+now requires remarks for both `Override` and `Voided`).
+
+New `finance_engine.py` (pure logic, mirrors `clearance_engine.py`'s role) + `finance_api.py`
+(whitelisted entry points, mirrors `clearance_api.py`): `get_fx_rate`/`record_fx_rate`
+(exact-date cache lookup falling back to the most recent earlier rate — Part H's "historical
+lookup for backdated entries"); `get_commission_rate` transcribed directly from Part D's
+pseudocode (Muayena → `manual_commission_amount`, throws if unset; Standard →
+`Contractor.default_commission_rates` for the destination country, throws if unconfigured);
+`accrue_commission` (idempotency-guarded — checked by testing it twice back-to-back and
+confirming only one transaction exists); `create_batch_request` as the single function both the
+automatic (threshold-triggered) and manual batching paths converge on, per Part D's explicit
+instruction not to duplicate that logic.
+
+**The visibility wall is genuinely a hard zero, not just an absent grant.** Doctype-level
+`read`/`write`/`create` on `Applicant Transaction` and `Commission Batch Request` are granted
+only to Finance Manager/Admin/System Manager (so anyone else is denied outright, same as
+Clearance Step in Step 7) — **and** `get_permission_query_conditions()` independently returns
+`"1=0"` for everyone else, as explicit belt-and-suspenders matching Part D's own emphasis ("not
+a soft filter, a hard zero") in case a future step ever broadens the doctype-level grant without
+re-deriving this reasoning. Write is split from read exactly per the addendum:
+`log_stage_expense`/`log_stage_income` insert with `ignore_permissions=True` after checking
+`is_assigned_to_placement()` (an open ToDo on the placement's Clearance Step or on the Placement
+itself, from Step 7's ToDo infrastructure) — an assigned officer can create a row but still
+can't `frappe.get_list` the ledger. **No `delete: 1` granted to any role on `Applicant
+Transaction` or `Commission Batch Request`, including System Manager** — a deliberate deviation
+from every other doctype's permission template so far, because "no hard delete, ever" (addendum)
+needs to actually hold, not just be a comment; `void_transaction()` (Finance Manager/Admin only,
+mandatory reason, logs a `Voided` Process Event, row stays visible with status flagged) is the
+only sanctioned way to deactivate a row.
+
+**A real architectural bug was caught and fixed systemically, not patched locally.**
+`TRANSITION_SIDE_EFFECTS` callables run *after* `transition()` has already called `doc.save()`
+and logged the `Process Event` — both already committed. The first cut of `accrue_commission`
+let `get_commission_rate`'s `ValidationError` (missing manual commission amount, a completely
+normal state for a Placement that just reached Departed before Finance got to it) propagate
+straight out of `transition()`. That makes the *whole transition* look like it failed to the
+caller — while the status change had, in fact, already gone through. A caller that saw the
+exception and assumed nothing happened, or retried, would be wrong; worse, it's silently
+inconsistent with the "transition() is the only sanctioned status-change path" guarantee the
+whole state machine is built on. This isn't specific to commission accrual — Step 7's
+`create_clearance_steps` (which calls `get_corridor_steps`, itself capable of throwing if a
+destination has no configured corridor) had the exact same latent exposure, just never
+triggered by a test. Fixed at the one correct level — inside `transition()` itself, wrapping the
+side-effect call in `try/except` and routing failures to `frappe.log_error` — rather than adding
+defensive try/except to every individual side-effect function and hoping every future one
+remembers to. The distinction this enforces going forward: `STAGE_GATES` may block a transition;
+`TRANSITION_SIDE_EFFECTS` may not — they're best-effort automation layered on top of a
+transition that has already legitimately happened.
+
+**Verified:** `bench migrate` clean; 39 new tests (FX cache + historical fallback, rate
+resolution for both tracks, idempotent accrual, a full lifecycle proof that accrual fires on
+reaching Departed, manual and auto-threshold batching, the write/read split, the visibility wall
+against a live `frappe.get_list` call — not just the query-condition function in isolation, void
+with mandatory reason and Process Event logging, field-level permlevel on
+`default_commission_rates`) — 109/109 total across the app. `fetch_daily_fx_rates()` (the
+scheduled live-API fetch) is the one exception to "verified, not just written" in this entire
+build: it's wired into `hooks.py`'s daily scheduler and calls a real, keyless API
+(`frankfurter.app`), but nothing in this session exercised it against live network access, and
+Gulf-currency (SAR/KWD/AED/QAR) coverage on a free ECB-sourced API isn't guaranteed. Flagged in
+the function's own docstring — verify before relying on it in production (Step 15), and treat
+`record_fx_rate`/manual entry as the load-bearing path until then.
+
+**Not yet done (deferred):** the reconciliation half of Part A.6 ("official bank/payment
+statements can be uploaded and matched automatically against what's owed") is explicitly Step 9,
+not this one.

@@ -16,7 +16,10 @@
   "contract_file",
   "contract_signed_date",
   "medical_2_sec",
-  "medical_2_status"
+  "medical_2_status",
+  "commission_sec",
+  "manual_commission_amount",
+  "manual_commission_currency"
  ],
  "fields": [
   {
@@ -100,6 +103,25 @@
    "in_list_view": 1,
    "label": "Medical 2 Status",
    "options": "Pending\nFIT\nUNFIT"
+  },
+  {
+   "collapsible": 1,
+   "depends_on": "eval:doc.__islocal || doc.manual_commission_amount",
+   "fieldname": "commission_sec",
+   "fieldtype": "Section Break",
+   "label": "Commission (Muayena only)"
+  },
+  {
+   "description": "Part A.1: Muayena commission is never a default rate — always set manually per case. Standard-track placements use the Contractor's default_commission_rates instead (Part D).",
+   "fieldname": "manual_commission_amount",
+   "fieldtype": "Currency",
+   "label": "Manual Commission Amount"
+  },
+  {
+   "fieldname": "manual_commission_currency",
+   "fieldtype": "Select",
+   "label": "Manual Commission Currency",
+   "options": "\nSAR\nKWD\nUSD\nETB\nAED\nQAR"
   }
  ],
  "index_web_pages_for_search": 1,

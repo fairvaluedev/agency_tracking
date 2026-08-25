@@ -6,3 +6,4 @@ __version__ = "0.0.1"
 # Deliberately at the bottom: if this ever needs a second such module, this becomes the one
 # place all of them get imported from, not scattered import-order assumptions elsewhere.
 import agency_tracking.clearance_engine  # noqa: E402,F401
+import agency_tracking.finance_engine  # noqa: E402,F401

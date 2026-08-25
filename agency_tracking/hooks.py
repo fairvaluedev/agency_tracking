@@ -119,6 +119,8 @@ after_install = "agency_tracking.install.after_install"
 permission_query_conditions = {
 	"Process Event": "agency_tracking.agency_tracking.doctype.process_event.process_event.get_permission_query_conditions",
 	"Clearance Step": "agency_tracking.agency_tracking.doctype.clearance_step.clearance_step.get_permission_query_conditions",
+	"Applicant Transaction": "agency_tracking.agency_tracking.doctype.applicant_transaction.applicant_transaction.get_permission_query_conditions",
+	"Commission Batch Request": "agency_tracking.agency_tracking.doctype.commission_batch_request.commission_batch_request.get_permission_query_conditions",
 }
 
 # DocType Class
@@ -144,23 +146,11 @@ permission_query_conditions = {
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"agency_tracking.tasks.all"
-# 	],
-# 	"daily": [
-# 		"agency_tracking.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"agency_tracking.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"agency_tracking.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"agency_tracking.tasks.monthly"
-# 	],
-# }
+scheduler_events = {
+	"daily": [
+		"agency_tracking.finance_engine.fetch_daily_fx_rates",
+	],
+}
 
 # Testing
 # -------

@@ -108,7 +108,22 @@ def transition(doc, new_status, actor=None, override=False, override_reason=None
 
 	side_effect = TRANSITION_SIDE_EFFECTS.get((doc.doctype, new_status))
 	if side_effect:
-		side_effect(doc)
+		try:
+			side_effect(doc)
+		except Exception:
+			# Side effects run after the transition has already committed (doc.save() +
+			# Process Event, both above). Letting an exception here propagate would make
+			# transition() look like it failed to the caller while the status change actually
+			# went through — corrupting the "only sanctioned path" guarantee (a caller who
+			# catches the exception and retries, or assumes nothing happened, would be wrong).
+			# Side effects are best-effort automation layered on top of a transition that has
+			# already legitimately happened; only STAGE_GATES may block a transition itself.
+			# Real failures (e.g. commission accrual missing a configured rate) are logged for
+			# staff to notice and resolve manually, not silently lost.
+			frappe.log_error(
+				title="Transition side effect failed",
+				message=f"{doc.doctype} {doc.name}: {current_status} -> {new_status}",
+			)
 
 	return doc
 
