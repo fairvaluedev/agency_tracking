@@ -1,0 +1,349 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "APP-.#####",
+ "creation": "2026-08-25 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "identity_sec",
+  "entry_track",
+  "full_name",
+  "gender",
+  "nationality",
+  "col_break_identity",
+  "phone",
+  "address",
+  "date_of_birth",
+  "registration_sec",
+  "national_id",
+  "labor_id",
+  "destination_country",
+  "religion",
+  "marital_status",
+  "col_break_registration",
+  "target_job",
+  "education",
+  "salary_amount",
+  "salary_currency",
+  "emergency_contact_name",
+  "emergency_contact_phone",
+  "passport_sec",
+  "passport_number",
+  "passport_issue_date",
+  "passport_expiry_date",
+  "col_break_passport",
+  "passport_issue_place",
+  "passport_scan",
+  "photograph",
+  "medical_sec",
+  "medical_status",
+  "col_break_medical",
+  "medical_issue_date",
+  "medical_expiry_date",
+  "musaned_sec",
+  "musaned_status",
+  "lifecycle_sec",
+  "status"
+ ],
+ "fields": [
+  {
+   "fieldname": "identity_sec",
+   "fieldtype": "Section Break",
+   "label": "Identity (Draft floor)"
+  },
+  {
+   "default": "Standard",
+   "fieldname": "entry_track",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Entry Track",
+   "options": "Standard\nMuayena",
+   "reqd": 1
+  },
+  {
+   "fieldname": "full_name",
+   "fieldtype": "Data",
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "label": "Name"
+  },
+  {
+   "fieldname": "gender",
+   "fieldtype": "Select",
+   "label": "Gender",
+   "options": "\nFemale\nMale\nOther"
+  },
+  {
+   "fieldname": "nationality",
+   "fieldtype": "Link",
+   "label": "Nationality",
+   "options": "Country"
+  },
+  {
+   "fieldname": "col_break_identity",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "phone",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Phone",
+   "options": "Phone"
+  },
+  {
+   "fieldname": "address",
+   "fieldtype": "Small Text",
+   "label": "Address"
+  },
+  {
+   "fieldname": "date_of_birth",
+   "fieldtype": "Date",
+   "label": "Date of Birth"
+  },
+  {
+   "fieldname": "registration_sec",
+   "fieldtype": "Section Break",
+   "label": "Registration (Standard: full floor / Muayena: not required)"
+  },
+  {
+   "fieldname": "national_id",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "National ID"
+  },
+  {
+   "depends_on": "eval:doc.entry_track == 'Standard'",
+   "fieldname": "labor_id",
+   "fieldtype": "Data",
+   "label": "Labor ID"
+  },
+  {
+   "fieldname": "destination_country",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Destination Country",
+   "options": "Country"
+  },
+  {
+   "depends_on": "eval:doc.entry_track == 'Standard'",
+   "fieldname": "religion",
+   "fieldtype": "Select",
+   "label": "Religion",
+   "options": "\nMuslim\nOrthodox Christian\nProtestant\nCatholic\nOther"
+  },
+  {
+   "depends_on": "eval:doc.entry_track == 'Standard'",
+   "fieldname": "marital_status",
+   "fieldtype": "Select",
+   "label": "Marital Status",
+   "options": "\nSingle\nMarried\nDivorced\nWidowed"
+  },
+  {
+   "fieldname": "col_break_registration",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.entry_track == 'Standard'",
+   "fieldname": "target_job",
+   "fieldtype": "Data",
+   "label": "Target Job"
+  },
+  {
+   "depends_on": "eval:doc.entry_track == 'Standard'",
+   "fieldname": "education",
+   "fieldtype": "Select",
+   "label": "Education",
+   "options": "\nPrimary School\nMiddle School\nHigh School\nDiploma\nBachelor's Degree\nOther"
+  },
+  {
+   "depends_on": "eval:doc.entry_track == 'Standard'",
+   "fieldname": "salary_amount",
+   "fieldtype": "Currency",
+   "label": "Expected Salary"
+  },
+  {
+   "depends_on": "eval:doc.entry_track == 'Standard'",
+   "fieldname": "salary_currency",
+   "fieldtype": "Select",
+   "label": "Salary Currency",
+   "options": "\nSAR\nKWD\nUSD\nETB\nAED\nQAR"
+  },
+  {
+   "depends_on": "eval:doc.entry_track == 'Standard'",
+   "fieldname": "emergency_contact_name",
+   "fieldtype": "Data",
+   "label": "Emergency Contact Name"
+  },
+  {
+   "depends_on": "eval:doc.entry_track == 'Standard'",
+   "fieldname": "emergency_contact_phone",
+   "fieldtype": "Data",
+   "label": "Emergency Contact Phone",
+   "options": "Phone"
+  },
+  {
+   "fieldname": "passport_sec",
+   "fieldtype": "Section Break",
+   "label": "Passport (required for Registered, both tracks)"
+  },
+  {
+   "fieldname": "passport_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Passport Number"
+  },
+  {
+   "fieldname": "passport_issue_date",
+   "fieldtype": "Date",
+   "label": "Passport Issue Date"
+  },
+  {
+   "fieldname": "passport_expiry_date",
+   "fieldtype": "Date",
+   "label": "Passport Expiry Date"
+  },
+  {
+   "fieldname": "col_break_passport",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "passport_issue_place",
+   "fieldtype": "Data",
+   "label": "Passport Issue Place"
+  },
+  {
+   "fieldname": "passport_scan",
+   "fieldtype": "Attach",
+   "label": "Passport Scan"
+  },
+  {
+   "fieldname": "photograph",
+   "fieldtype": "Attach Image",
+   "label": "Photograph"
+  },
+  {
+   "fieldname": "medical_sec",
+   "fieldtype": "Section Break",
+   "label": "Medical"
+  },
+  {
+   "default": "Pending",
+   "fieldname": "medical_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Medical Status",
+   "options": "Pending\nFIT\nUNFIT"
+  },
+  {
+   "fieldname": "col_break_medical",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "medical_issue_date",
+   "fieldtype": "Date",
+   "label": "Medical Issue Date"
+  },
+  {
+   "fieldname": "medical_expiry_date",
+   "fieldtype": "Date",
+   "label": "Medical Expiry Date"
+  },
+  {
+   "collapsible": 1,
+   "depends_on": "eval:doc.entry_track == 'Standard' && doc.destination_country == 'Saudi Arabia'",
+   "fieldname": "musaned_sec",
+   "fieldtype": "Section Break",
+   "label": "Musaned (Saudi Standard only)"
+  },
+  {
+   "default": "Not Applicable",
+   "fieldname": "musaned_status",
+   "fieldtype": "Select",
+   "label": "Musaned Status",
+   "options": "Not Applicable\nPending\nALTEYAZECHEM\nTEYZALECH"
+  },
+  {
+   "fieldname": "lifecycle_sec",
+   "fieldtype": "Section Break",
+   "label": "Lifecycle"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Draft\nRegistered\nCV Generated",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-25 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Agency Tracking",
+ "name": "Applicant",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Recruitment/Intake",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Admin",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "full_name,passport_number,national_id,phone,destination_country",
+ "show_title_field_in_link": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "full_name",
+ "track_changes": 1
+}

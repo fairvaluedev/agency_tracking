@@ -82,8 +82,7 @@ app_license = "mit"
 # Installation
 # ------------
 
-# before_install = "agency_tracking.install.before_install"
-# after_install = "agency_tracking.install.after_install"
+after_install = "agency_tracking.install.after_install"
 
 # Uninstallation
 # ------------
