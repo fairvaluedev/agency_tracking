@@ -28,20 +28,35 @@ ALLOWED_TRANSITIONS = {
 		("Draft", "Registered"),
 		("Registered", "CV Generated"),
 	},
+	"Placement": {
+		("Selected", "Processing"),
+		("Processing", "Stamped"),
+		("Stamped", "Ticketed"),
+		("Ticketed", "Departed"),
+	},
 }
 
 # (from_status, to_status) -> callable(doc) -> bool. Applicant's Draft->Registered move has no
 # cross-doctype gate (just the field-floor/medical check already in Applicant.validate()).
 # Registered->CV Generated is gated on cv_generation_gate (Standard track + Musaned, Step 2).
-# Further gates (Te'shsir->Injaz on medical FIT, Ticketed->Departed on Medical 2, etc.) are
-# added at Step 6 once those stages exist.
+# Placement's Ticketed->Departed is gated on medical_2_gate (Step 6, below). Selected->
+# Processing and Stamped->Ticketed have no gate yet (nothing to check against). Processing->
+# Stamped's real gate — "all mandatory corridor steps issued" — depends on Clearance Step,
+# which doesn't exist until Step 7; left ungated until then.
 STAGE_GATES = {}
 
 
-def transition(doc, new_status, actor=None):
+def transition(doc, new_status, actor=None, override=False, override_reason=None):
 	"""The only sanctioned status-change path. Validates the move is a legal edge for this
 	doctype, runs any registered gate, commits the change (which re-triggers the doctype's
-	own validate() against the new status), and returns the saved doc.
+	own validate() against the new status), logs a Process Event, and returns the saved doc.
+
+	Manager Override (business-workflow-srs.md: "can override a blocked step... always with a
+	written reason"): if a gate blocks the move, override=True + a non-empty override_reason
+	lets a Manager/Admin force it through anyway. Override only ever bypasses a *gate* — the
+	ALLOWED_TRANSITIONS topology itself is never overridable; there's no business case in the
+	spec for skipping an entire lifecycle stage, only for forcing past a blocked condition
+	within an otherwise-legal move.
 	"""
 	current_status = doc.status
 	allowed = ALLOWED_TRANSITIONS.get(doc.doctype, set())
@@ -54,14 +69,37 @@ def transition(doc, new_status, actor=None):
 		)
 
 	gate = STAGE_GATES.get((current_status, new_status))
-	if gate and not gate(doc):
-		frappe.throw(
-			"'{0}' -> '{1}' is blocked: gate condition not met.".format(current_status, new_status),
-			frappe.ValidationError,
-		)
+	gate_passed = gate(doc) if gate else True
+	is_override = bool(gate) and not gate_passed
 
+	if is_override:
+		if not override:
+			frappe.throw(
+				"'{0}' -> '{1}' is blocked: gate condition not met.".format(current_status, new_status),
+				frappe.ValidationError,
+			)
+		if not ({"Manager", "Admin"} & set(frappe.get_roles())):
+			frappe.throw("Only Manager or Admin can override a blocked transition.", frappe.PermissionError)
+		if not override_reason:
+			frappe.throw("A written reason is required to override this gate.", frappe.ValidationError)
+
+	actor = actor or frappe.session.user
 	doc.status = new_status
 	doc.save()
+
+	frappe.get_doc(
+		{
+			"doctype": "Process Event",
+			"reference_doctype": doc.doctype,
+			"reference_name": doc.name,
+			"event_type": "Override" if is_override else "Transition",
+			"from_status": current_status,
+			"to_status": new_status,
+			"actor": actor,
+			"remarks": override_reason if is_override else None,
+		}
+	).insert(ignore_permissions=True)
+
 	return doc
 
 
@@ -94,3 +132,16 @@ def cv_generation_gate(applicant) -> bool:
 
 
 STAGE_GATES[("Registered", "CV Generated")] = cv_generation_gate
+
+
+# --- Medical 2 gate (Part A.2 Stage 8 / Step 6) ---
+# The pre-departure check (~72h before flight) is separate from the earlier registration-time
+# FIT check — a candidate can pass the first medical, get all the way to Ticketed, and still
+# fail this one. "If this fails, the flight is cancelled and departure is blocked."
+
+
+def medical_2_gate(placement) -> bool:
+	return placement.medical_2_status == "FIT"
+
+
+STAGE_GATES[("Ticketed", "Departed")] = medical_2_gate

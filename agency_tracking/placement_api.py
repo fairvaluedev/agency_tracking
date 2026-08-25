@@ -6,7 +6,7 @@
 import frappe
 
 from agency_tracking.contract_parser import parse_contract_file
-from agency_tracking.state_machine import lock_applicant_row
+from agency_tracking.state_machine import lock_applicant_row, transition
 
 
 @frappe.whitelist()
@@ -82,3 +82,23 @@ def create_muayena_placement(applicant_name, contractor_name, destination_countr
 
 	frappe.db.set_value("Applicant", applicant_name, "active_placement", placement.name)
 	return placement.as_dict()
+
+
+@frappe.whitelist()
+def advance_placement(placement_name, new_status, override_reason=None):
+	"""Move a Placement forward through its lifecycle via the sanctioned transition() path
+	(Part C). Passing override_reason attempts a Manager Override if the move is gate-blocked
+	(business-workflow-srs.md: "always with a written reason") — transition() itself enforces
+	the Manager/Admin role check and that the reason is non-empty.
+
+	This is the direct/manual path. The real auto-chain (LMIS -> Ticketing -> Departure,
+	corridor-completion gating Processing -> Stamped) is Step 7, once Clearance Step exists to
+	drive and gate against.
+	"""
+	placement = frappe.get_doc("Placement", placement_name)
+	if not placement.has_permission("write"):
+		frappe.throw("Not permitted.", frappe.PermissionError)
+
+	return transition(
+		placement, new_status, override=bool(override_reason), override_reason=override_reason
+	).as_dict()

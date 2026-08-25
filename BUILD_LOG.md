@@ -19,7 +19,7 @@ see `[[project-agency-tracking-gap-analysis]]` memory for why it wasn't reused).
 - [x] 3. Portal + atomic selection + `active_placement` locking
 - [x] 4. Contract parsing (both tracks) → Placement creation
 - [x] 5. Corridor Definition engine (Saudi + Kuwait)
-- [ ] 6. transition() + gate table + Manager Override (Medical 2 gate)
+- [x] 6. transition() + gate table + Manager Override (Medical 2 gate)
 - [ ] 7. Clearance Step + ToDo permission scoping + LMIS→Ticketing→Departure auto-chain
 - [ ] 8. Financial ledger (income/expense, FX, accrual, batching, visibility wall)
 - [ ] 9. Reconciliation tool
@@ -257,3 +257,50 @@ the seeding code existed); confirmed `Saudi Arabia` and `Kuwait` both exist with
 **Not yet done (deferred):** nothing in this step touches Placement or Clearance Step yet —
 Corridor Definition is pure reference data until Step 7 (Clearance Step) starts creating
 per-candidate step records from it, gated by Step 6's expanded `STAGE_GATES`.
+
+## Step 6 — what was built
+
+**Retrofitted a gap from Step 1, not scope creep:** Part C says `transition()` "writes the
+Process Event audit entry atomically" — that was true of every `transition()` call since Step 1,
+but the `Process Event` doctype itself didn't exist yet (nothing needed it urgently until
+Manager Override, this step's actual deliverable, needed somewhere to record the mandatory
+written reason). Built now: `Process Event` (Part B's audit trail — `reference_doctype`/
+`reference_name` dynamic link, `event_type` Transition/Override/Cancelled/Restored,
+`from_status`/`to_status`/`actor`/`remarks`), immutable by design (no doctype permission grants
+write/delete/create to anyone but System Manager — `transition()` writes rows via
+`ignore_permissions=True`, the only sanctioned writer). `get_permission_query_conditions()` in
+`process_event.py` is the addendum's own scoping function transcribed verbatim (Admin/Manager
+see everything, Finance Manager sees Applicant-Transaction-linked rows only, everyone else sees
+only their own actions) — wired into `hooks.py`. The Finance Manager and Complaint Manager
+branches are inert until Step 8/10 create the doctypes they reference; the function is complete
+now because CLAUDE.md says build permission logic alongside its doctype, not retrofit it later.
+
+`transition()` gained `override`/`override_reason` params: a gate-blocked move throws normally
+unless `override=True`, which then requires `{Manager, Admin}` role AND a non-empty
+`override_reason` (business-workflow-srs.md: "always with a written reason") — enforced inside
+`transition()` itself, not any caller. Every call now logs a `Process Event`, `Transition` or
+`Override` depending on whether a gate was actually bypassed. **Override only ever bypasses a
+gate, never the `ALLOWED_TRANSITIONS` topology itself** — flagging this as a judgment call since
+the spec doesn't explicitly say either way, but nothing in the business workflow describes
+skipping an entire lifecycle stage, only forcing past a blocked condition.
+
+`Placement` gained its full status vocabulary (`Selected → Processing → Stamped → Ticketed →
+Departed`, matching Part A.2 stages 5–9) and `medical_2_status` (the pre-departure ~72h check,
+distinct from the Applicant's earlier registration-time FIT check). `STAGE_GATES` gained
+`("Ticketed", "Departed")` → `medical_2_gate` — the step's explicitly-named deliverable.
+`Selected→Processing` and `Stamped→Ticketed` are intentionally left ungated (nothing to check
+yet); `Processing→Stamped`'s real gate ("all mandatory corridor steps issued") depends on
+Clearance Step and is explicitly Step 7's job, not stubbed here.
+
+New `placement_api.py:advance_placement()` — a direct/manual progression + override entry
+point, restricted to internal staff (Placement's doctype permissions grant nothing to Foreign
+Agency, verified by test). This is scaffolding for Step 7's real auto-chain (LMIS → Ticketing →
+Departure), not a replacement for it.
+
+**Verified:** `bench migrate` clean; 13 new tests (state machine mechanics — ungated transitions
+log correctly, gate blocks, override requires role + reason, disallowed edges never overridable;
+Process Event validation + permission scoping; `advance_placement` wiring) — 67/67 total across
+the app.
+
+**Not yet done (deferred):** the real Processing→Stamped gate, Clearance Step doctype, ToDo-based
+per-row permission scoping, and the LMIS→Ticketing→Departure auto-chain are all Step 7.

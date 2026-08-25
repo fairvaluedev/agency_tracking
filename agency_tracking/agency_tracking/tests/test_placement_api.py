@@ -9,7 +9,7 @@ from agency_tracking.agency_tracking.doctype.placement.test_placement import (
 	registered_applicant,
 )
 from agency_tracking.agency_tracking.tests.test_portal_api import cv_generated_applicant
-from agency_tracking.placement_api import create_muayena_placement, upload_contract
+from agency_tracking.placement_api import advance_placement, create_muayena_placement, upload_contract
 from agency_tracking.portal_api import select_candidate
 
 CONTRACT_TEXT_WITH_DATE = "Employment Contract\nContract Date: 13/08/2026\n..."
@@ -97,3 +97,23 @@ class TestPlacementAPI(FrappeTestCase):
 		frappe.set_user("Administrator")
 		result = upload_contract(placement["name"], "/files/fake-contract.pdf")
 		self.assertEqual(result["contract_file"], "/files/fake-contract.pdf")
+
+	def test_advance_placement_normal_move(self):
+		applicant = registered_applicant("mpa08", entry_track="Muayena", destination_country="Kuwait")
+		contractor = make_contractor("mpa08", country="Kuwait")
+		placement = create_muayena_placement(applicant.name, contractor.name, "Kuwait")
+
+		result = advance_placement(placement["name"], "Processing")
+		self.assertEqual(result["status"], "Processing")
+
+	def test_advance_placement_denies_foreign_agency_entirely(self):
+		# Progressing a Placement through clearance stages is internal staff work (Part G) —
+		# Placement's own doctype permissions grant no role to Foreign Agency at all, even the
+		# contractor who owns this exact placement.
+		applicant = registered_applicant("mpa09", entry_track="Muayena", destination_country="Kuwait")
+		owner = make_contractor("mpa09", country="Kuwait")
+		placement = create_muayena_placement(applicant.name, owner.name, "Kuwait")
+
+		frappe.set_user(owner.user)
+		with self.assertRaises(frappe.PermissionError):
+			advance_placement(placement["name"], "Processing")

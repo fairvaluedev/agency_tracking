@@ -14,7 +14,9 @@
   "cv_record",
   "contract_sec",
   "contract_file",
-  "contract_signed_date"
+  "contract_signed_date",
+  "medical_2_sec",
+  "medical_2_status"
  ],
  "fields": [
   {
@@ -58,7 +60,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Selected",
+   "options": "Selected\nProcessing\nStamped\nTicketed\nDeparted",
    "read_only": 1
   },
   {
@@ -84,6 +86,20 @@
    "fieldtype": "Date",
    "in_list_view": 1,
    "label": "Contract Signed Date"
+  },
+  {
+   "fieldname": "medical_2_sec",
+   "fieldtype": "Section Break",
+   "label": "Pre-Departure Medical (Medical 2)"
+  },
+  {
+   "default": "Pending",
+   "description": "Within ~72h of the flight. Separate from the Applicant's earlier registration-time FIT check (Part A.2 Stage 8) — gates Ticketed -> Departed.",
+   "fieldname": "medical_2_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Medical 2 Status",
+   "options": "Pending\nFIT\nUNFIT"
   }
  ],
  "index_web_pages_for_search": 1,
