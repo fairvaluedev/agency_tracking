@@ -13,6 +13,7 @@ from agency_tracking.finance_engine import (
 	is_assigned_to_placement,
 	list_owed_commissions,
 	record_fx_rate,
+	settle_batch_request,
 )
 
 
@@ -132,11 +133,4 @@ def create_commission_batch(contractor, destination_country, transaction_names=N
 def settle_batch(batch_name, settlement_reference):
 	if not ({"Finance Manager", "Admin"} & set(frappe.get_roles())):
 		frappe.throw("Not permitted.", frappe.PermissionError)
-	if not settlement_reference:
-		frappe.throw("A settlement reference is required.", frappe.ValidationError)
-	batch = frappe.get_doc("Commission Batch Request", batch_name)
-	batch.status = "Settled"
-	batch.settlement_reference = settlement_reference
-	batch.settled_on = today()
-	batch.save(ignore_permissions=True)
-	return batch.as_dict()
+	return settle_batch_request(batch_name, settlement_reference).as_dict()

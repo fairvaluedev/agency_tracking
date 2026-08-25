@@ -18,14 +18,18 @@ from agency_tracking.finance_engine import (
 from agency_tracking.state_machine import transition
 
 
-def departed_placement(tag):
+def departed_placement(tag, amount=250):
+	# amount is parameterized (not a shared constant) so tests that need a unique
+	# total_amount_birr to disambiguate matching logic (reconciliation tests) don't collide
+	# with other tests' leftover unsettled batches sitting around from earlier in the same
+	# run at the same default amount*rate.
 	placement = saudi_selected_placement(tag)
 	# Accrual on reaching Departed is now best-effort (state_machine.transition() logs and
 	# swallows side-effect failures rather than corrupting the transition itself) — set the
 	# commission data up front so accrual actually succeeds for tests that need a real
 	# transaction to batch against.
 	frappe.db.set_value(
-		"Placement", placement.name, {"manual_commission_amount": 250, "manual_commission_currency": "USD"}
+		"Placement", placement.name, {"manual_commission_amount": amount, "manual_commission_currency": "USD"}
 	)
 	placement.reload()
 	transition(placement, "Processing")

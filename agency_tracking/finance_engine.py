@@ -200,6 +200,21 @@ def create_batch_request(contractor_name, destination_country, transaction_names
 	return batch
 
 
+def settle_batch_request(batch_name, settlement_reference):
+	"""Shared by the manual settle_batch API call and the Step 9 reconciliation matcher — one
+	function both paths converge on, same reasoning as create_batch_request()."""
+	if not settlement_reference:
+		frappe.throw("A settlement reference is required.", frappe.ValidationError)
+	batch = frappe.get_doc("Commission Batch Request", batch_name)
+	if batch.status == "Settled":
+		return batch  # idempotent — a statement line re-matched against an already-settled batch is a no-op
+	batch.status = "Settled"
+	batch.settlement_reference = settlement_reference
+	batch.settled_on = today()
+	batch.save(ignore_permissions=True)
+	return batch
+
+
 def _maybe_auto_batch(contractor_name, destination_country):
 	contractor = frappe.get_doc("Contractor", contractor_name)
 	if contractor.batch_mode != "Auto-Threshold" or not contractor.batch_threshold:

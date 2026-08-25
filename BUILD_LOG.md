@@ -22,7 +22,7 @@ see `[[project-agency-tracking-gap-analysis]]` memory for why it wasn't reused).
 - [x] 6. transition() + gate table + Manager Override (Medical 2 gate)
 - [x] 7. Clearance Step + ToDo permission scoping + LMIS→Ticketing→Departure auto-chain
 - [x] 8. Financial ledger (income/expense, FX, accrual, batching, visibility wall)
-- [ ] 9. Reconciliation tool
+- [x] 9. Reconciliation tool
 - [ ] 10. Complaints
 - [ ] 11. Notification pipeline
 - [ ] 12. Chat
@@ -445,3 +445,46 @@ the function's own docstring — verify before relying on it in production (Step
 **Not yet done (deferred):** the reconciliation half of Part A.6 ("official bank/payment
 statements can be uploaded and matched automatically against what's owed") is explicitly Step 9,
 not this one.
+
+## Step 9 — what was built
+
+`Bank Statement` (`statement_file`, `uploaded_by`, `status`, child `lines`) + `Bank Statement
+Line` (`statement_date`, `reference`, `amount`, `match_status`, `matched_batch`) — Finance
+Manager/Admin/System Manager only, same as the rest of the financial doctypes, no `delete: 1`
+(consistent with Step 8's "no hard delete" stance — a source document shouldn't disappear
+either). New `reconciliation_engine.py`: `parse_bank_statement_csv()` and
+`match_statement_lines()`; `reconciliation_api.py`: `upload_bank_statement()` and
+`manually_match_line()` (the escape hatch for ambiguous matches).
+
+**Scope call, flagged rather than silently made:** Part A.6 says statements "can be uploaded and
+matched automatically" but doesn't describe a specific bank's export format. Rather than guess
+at a real bank's layout with no sample to build against — the exact anti-pattern flagged in Step
+4's contract-parser scope note and in the original gap analysis of the Gemini prototype (~1000
+lines of regex against an assumed format) — this defines its own plain CSV format (`date,
+reference, amount`). The genuinely spec-required, testable part is the **matching logic**, not
+the file format, so that's where the real engineering went.
+
+**Matching algorithm** (`settle_batch_request()` — the same function `finance_api.settle_batch`
+uses, per the "one function both paths converge on" pattern established for batching in Step
+8): for each unmatched line, find unsettled `Commission Batch Request`s whose `total_amount_birr`
+matches within a cent. Exactly one candidate → auto-match and settle. Multiple candidates → only
+auto-match if exactly one candidate's batch name or contractor name appears in the line's
+reference text; otherwise leave `Unmatched` for a human rather than guessing. Already-settled
+batches are excluded from candidates so a statement re-matched twice doesn't misfire.
+
+**Real bug caught and fixed:** the first test run had two failures where an amount that should
+have matched exactly one candidate matched zero. Cause: `departed_placement()` (the Step 8 test
+helper) always used the same hardcoded commission amount, so unsettled batches from *earlier*
+tests in the same run (e.g. Step 8's own batching tests, which never settle what they create)
+were still sitting in the DB with the identical `total_amount_birr` as the batch a reconciliation
+test had just created — turning an intended single-candidate match into an accidental multi-
+candidate one. Same root cause shape as Step 7's ordering bug (shared mutable DB state across a
+whole test run), different manifestation. Fixed by making the test helper's amount a
+deterministic function of the test tag rather than a shared constant, so unrelated tests can
+never collide on `total_amount_birr` — a general lesson for any future test needing an
+"amount," not just this step's.
+
+**Verified:** `bench migrate` clean; 10 new tests (CSV parsing incl. malformed-row tolerance,
+unambiguous match, ambiguous match correctly left unmatched, reference-text disambiguation,
+already-settled batches excluded, end-to-end upload→parse→match, manual-match escape hatch, and
+permission checks on both) — 119/119 total across the app.
