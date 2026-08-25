@@ -11,7 +11,10 @@
   "destination_country",
   "col_break_placement",
   "status",
-  "cv_record"
+  "cv_record",
+  "contract_sec",
+  "contract_file",
+  "contract_signed_date"
  ],
  "fields": [
   {
@@ -64,6 +67,23 @@
    "label": "CV Record",
    "options": "CV Record",
    "read_only": 1
+  },
+  {
+   "fieldname": "contract_sec",
+   "fieldtype": "Section Break",
+   "label": "Contract"
+  },
+  {
+   "fieldname": "contract_file",
+   "fieldtype": "Attach",
+   "label": "Contract File"
+  },
+  {
+   "description": "Extracted at parse time from the contract itself (Part A.4) — not the Placement's creation date. Falls back to manual entry if parsing can't find it.",
+   "fieldname": "contract_signed_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Contract Signed Date"
   }
  ],
  "index_web_pages_for_search": 1,

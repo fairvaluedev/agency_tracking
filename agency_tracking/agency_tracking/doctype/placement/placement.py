@@ -9,10 +9,17 @@ class Placement(Document):
 	def validate(self):
 		applicant = frappe.get_doc("Applicant", self.applicant)
 
-		if applicant.entry_track == "Muayena":
+		# Standard: only past CV Generated (portal-selected, Step 3). Muayena: Registered is
+		# their terminal intake status (Part A.1 — they never touch CV Generated at all), so
+		# Registered is the floor for their direct contract-upload entry (Step 4).
+		valid_applicant_status = {
+			"Standard": "CV Generated",
+			"Muayena": "Registered",
+		}[applicant.entry_track]
+		if applicant.status != valid_applicant_status:
 			frappe.throw(
-				"Muayena Placement creation (direct contract-upload entry) isn't wired in yet "
-				"— see Part I Step 4.",
+				f"{applicant.name} ({applicant.entry_track}) must be '{valid_applicant_status}' "
+				f"before a Placement can be created (currently '{applicant.status}').",
 				frappe.ValidationError,
 			)
 

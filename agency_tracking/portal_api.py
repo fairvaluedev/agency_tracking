@@ -8,6 +8,8 @@
 
 import frappe
 
+from agency_tracking.state_machine import lock_applicant_row
+
 # Non-PII browsing fields only (business names/skills, not passport/national ID/phone/address/
 # emergency contacts) — the spec doesn't enumerate an exact portal field list, so this is a
 # judgment call; tightened rather than loosened since the alternative is leaking PII to a
@@ -83,7 +85,7 @@ def select_candidate(applicant_name):
 	# select_candidate() for the same applicant blocks here until the first is done, then
 	# sees active_placement already set and is rejected. Without this, two agencies could
 	# both read active_placement as empty before either had written it.
-	frappe.db.sql("SELECT `name` FROM `tabApplicant` WHERE `name`=%s FOR UPDATE", applicant_name)
+	lock_applicant_row(applicant_name)
 	current_lock = frappe.db.get_value("Applicant", applicant_name, "active_placement")
 	if current_lock:
 		frappe.throw(

@@ -12,6 +12,14 @@
 
 import frappe
 
+
+def lock_applicant_row(applicant_name):
+	"""Row-level lock (SELECT ... FOR UPDATE), held until the current request's transaction
+	commits. Used anywhere two concurrent requests could both read active_placement as empty
+	before either writes it — portal selection (Step 3) and Muayena direct-entry (Step 4)."""
+	frappe.db.sql("SELECT `name` FROM `tabApplicant` WHERE `name`=%s FOR UPDATE", applicant_name)
+
+
 # doctype -> set of (from_status, to_status) edges that are legal to attempt.
 # Extended as each build step introduces new statuses (Placement's Selected/Processing/
 # Stamped/Ticketed/Departed land here from Step 3 onward).

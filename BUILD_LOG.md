@@ -17,7 +17,7 @@ see `[[project-agency-tracking-gap-analysis]]` memory for why it wasn't reused).
 - [x] 1. Core identity + track-aware field floor (Applicant, Standard/Muayena, Musaned gate stub)
 - [x] 2. CV generation + Musaned gate wired in
 - [x] 3. Portal + atomic selection + `active_placement` locking
-- [ ] 4. Contract parsing (both tracks) → Placement creation
+- [x] 4. Contract parsing (both tracks) → Placement creation
 - [ ] 5. Corridor Definition engine (Saudi + Kuwait)
 - [ ] 6. transition() + gate table + Manager Override (Medical 2 gate)
 - [ ] 7. Clearance Step + ToDo permission scoping + LMIS→Ticketing→Departure auto-chain
@@ -183,3 +183,49 @@ whole app.
 **Not yet done (deferred):** Muayena's direct-to-Selected entry path (no portal, contract
 already in hand) is Step 4, alongside the contract-parsing utility that fills
 `contract_signed_date` for both tracks.
+
+## Step 4 — what was built
+
+`contract_parser.py` (app root, not a doctype): PyMuPDF text extraction +
+`extract_contract_signed_date()` (English and Arabic date-label regexes) + `parse_contract_file()`
+wrapper that resolves a Frappe file_url to a filesystem path. **Deliberately narrow** — the old
+Gemini prototype's equivalent (`applicant_processing/utils/contract_parser.py`) extracts ~20
+sponsor/employer/agency sub-fields via ~1000 lines of regex; nothing in Part B ties any of that
+to a Placement field, so building it here would be speculative surface with no spec-required
+consumer. The one field the spec actually calls for (Part A.4: "contract-age clock starts from
+the contract's own signed date, extracted at parse time") is what's built, tested against both
+a synthetic and a real generated PDF (PyMuPDF smoke-tested end-to-end via console, not just the
+missing-file fallback path).
+
+`Placement` gained `contract_file` (Attach) and `contract_signed_date` (Date) — the two fields
+flagged as deferred in Step 3's log. New `placement_api.py`: `upload_contract()` (Standard
+track — attaches a contract to the Placement Step 3 already created) and
+`create_muayena_placement()` (Muayena track — the direct "contract in hand" entry Part A.1
+describes, no portal or CV involved at all).
+
+**Placement.validate() invariant revised** (was: "Muayena blocked, not wired in yet"; now: a
+track-aware floor) — Standard requires `Applicant.status == "CV Generated"` (came through the
+portal), Muayena requires `"Registered"` (their terminal intake status, since they never touch
+CV Generated). This also required updating three Step-3 tests that had been asserting against
+the old "Registered is enough" placeholder invariant — not a regression, the invariant simply
+didn't exist correctly until this step gave Muayena a real creation path to test against.
+
+**Real bug caught and fixed before commit:** `upload_contract()`'s first draft gated the "is
+this an agency or staff" branch on `"Foreign Agency" in frappe.get_roles()`. That's wrong — the
+special `Administrator` user is assigned literally every role in the system (verified via
+console), so the check always took the agency branch and rejected Administrator as "not the
+right contractor." Fixed to key off whether the session user has an actual linked `Contractor`
+record instead, which is the real signal and doesn't misfire for Administrator/System Manager.
+Worth remembering for every future permission check in this codebase: never gate on role
+membership alone when `Administrator` needs to be handled correctly, check a concrete
+relationship (linked record, assignment, ownership) instead.
+
+**Verified:** `bench migrate` clean; 8 new contract-parser tests + 8 new placement-api tests +
+revised Placement tests — 46/46 total across the whole app. Console smoke test generated a real
+PDF with PyMuPDF and confirmed `contract_signed_date` extraction end-to-end (not mocked).
+`pymupdf` added to `pyproject.toml` (was working only because it leaked in from the other app's
+shared venv — now properly declared).
+
+**Not yet done (deferred):** no gate/transition wiring for Placement's own lifecycle yet
+(Selected -> Processing -> ...) — that's Corridor Definition (Step 5) and the full gate table
+(Step 6).

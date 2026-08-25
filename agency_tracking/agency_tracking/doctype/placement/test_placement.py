@@ -86,8 +86,13 @@ def make_contractor(tag, country="Kuwait"):
 
 
 class TestPlacement(FrappeTestCase):
-	def test_muayena_placement_creation_blocked(self):
-		applicant = registered_applicant("t01", entry_track="Muayena")
+	# Muayena's floor is just "Registered" (Part A.1: no CV/portal at all), so it's the
+	# lighter fixture for exercising invariants that apply to Placement regardless of track
+	# (destination match, duplicate lock). Standard's own extra requirement — CV Generated,
+	# not just Registered — is covered separately below.
+
+	def test_standard_below_cv_generated_blocked(self):
+		applicant = registered_applicant("t01", entry_track="Standard", destination_country="Kuwait")
 		contractor = make_contractor("t01")
 		with self.assertRaises(frappe.ValidationError):
 			frappe.get_doc(
@@ -100,9 +105,23 @@ class TestPlacement(FrappeTestCase):
 				}
 			).insert(ignore_permissions=True)
 
+	def test_muayena_at_registered_creates(self):
+		applicant = registered_applicant("t02", entry_track="Muayena", destination_country="Kuwait")
+		contractor = make_contractor("t02")
+		placement = frappe.get_doc(
+			{
+				"doctype": "Placement",
+				"applicant": applicant.name,
+				"contractor": contractor.name,
+				"destination_country": "Kuwait",
+				"status": "Selected",
+			}
+		).insert(ignore_permissions=True)
+		self.assertEqual(placement.status, "Selected")
+
 	def test_destination_country_mismatch_blocked(self):
-		applicant = registered_applicant("t02", destination_country="Kuwait")
-		contractor = make_contractor("t02", country="Saudi Arabia")
+		applicant = registered_applicant("t03", entry_track="Muayena", destination_country="Kuwait")
+		contractor = make_contractor("t03", country="Saudi Arabia")
 		with self.assertRaises(frappe.ValidationError):
 			frappe.get_doc(
 				{
@@ -115,8 +134,8 @@ class TestPlacement(FrappeTestCase):
 			).insert(ignore_permissions=True)
 
 	def test_duplicate_active_placement_blocked(self):
-		applicant = registered_applicant("t03", destination_country="Kuwait")
-		contractor = make_contractor("t03")
+		applicant = registered_applicant("t04", entry_track="Muayena", destination_country="Kuwait")
+		contractor = make_contractor("t04")
 		placement = frappe.get_doc(
 			{
 				"doctype": "Placement",
@@ -139,17 +158,3 @@ class TestPlacement(FrappeTestCase):
 					"status": "Selected",
 				}
 			).insert(ignore_permissions=True)
-
-	def test_valid_placement_creates(self):
-		applicant = registered_applicant("t04", destination_country="Kuwait")
-		contractor = make_contractor("t04")
-		placement = frappe.get_doc(
-			{
-				"doctype": "Placement",
-				"applicant": applicant.name,
-				"contractor": contractor.name,
-				"destination_country": "Kuwait",
-				"status": "Selected",
-			}
-		).insert(ignore_permissions=True)
-		self.assertEqual(placement.status, "Selected")
