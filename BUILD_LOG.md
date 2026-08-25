@@ -16,7 +16,7 @@ see `[[project-agency-tracking-gap-analysis]]` memory for why it wasn't reused).
 
 - [x] 1. Core identity + track-aware field floor (Applicant, Standard/Muayena, Musaned gate stub)
 - [x] 2. CV generation + Musaned gate wired in
-- [ ] 3. Portal + atomic selection + `active_placement` locking
+- [x] 3. Portal + atomic selection + `active_placement` locking
 - [ ] 4. Contract parsing (both tracks) → Placement creation
 - [ ] 5. Corridor Definition engine (Saudi + Kuwait)
 - [ ] 6. transition() + gate table + Manager Override (Medical 2 gate)
@@ -140,3 +140,46 @@ Applicants are rejected outright.
 **Not yet done (deferred):** portal visibility of CV-Generated candidates is Step 3's
 concern (that's literally what "Portal" means in Step 3's name) — nothing here exposes CV
 Records to any agency-facing query yet.
+
+## Step 3 — what was built
+
+`Contractor` doctype (minimal: `contractor_name`, `country`, one `user` Link per contractor —
+see assumption below) and `Placement` doctype (minimal: `applicant`, `contractor`,
+`destination_country`, `status` — options just `"Selected"` for now, `cv_record`; richer
+Part B fields — `contract_signed_date`, `manual_commission_amount`, `is_free_replacement` —
+deliberately **not** added yet, see "Standing decisions" correction below). `Applicant`
+gained `active_placement` (Link -> Placement, read-only, set only through the API). New
+`portal_api.py`: `list_portal_candidates()` (own-country catalog, non-PII field subset —
+judgment call, spec doesn't enumerate exact portal fields) and `select_candidate()` — the
+atomic, globally-exclusive selection, using `SELECT ... FOR UPDATE` on the Applicant row to
+close the race window between two agencies both reading `active_placement` as empty.
+
+**Resolved an open question from Step 1's log:** whether Applicant needs a 4th status value
+once Placement exists. Answer: no. Part B splits ownership — Applicant's own `status` only
+ever covers the pre-Placement pipeline (Draft/Registered/CV Generated); once a Placement
+exists, the real lifecycle state lives on `Placement.status` and `active_placement` is simply
+the pointer/lock. This also explains why Muayena candidates (who skip CV/portal) will end up
+with `Applicant.status` frozen at `"Registered"` forever once Step 4 gives them a Placement —
+that's correct, not a bug.
+
+**Standing-decision correction:** Step 1/2 added `musaned_status` and (implicitly) treated
+Part B's per-doctype field notes as license to add fields ahead of the logic using them. On
+reflection that's the same "fields exist, nothing uses them" smell flagged in the
+Gemini-prototype gap analysis as an anti-pattern to avoid. Revised rule going forward: add a
+field only in the step that actually gates or reads it (`musaned_status` gets a pass — it was
+explicitly named "Musaned gate stub" in Step 1's own title, a deliberate one-step-early
+exception, not the general pattern). `Placement.contract_signed_date` lands in Step 4,
+`manual_commission_amount` in Step 8, `is_free_replacement` in Step 10 — not now.
+
+**Assumption flagged:** one Contractor <-> one portal User. The spec doesn't describe
+multi-user agencies; if an agency needs several staff logging in, `Contractor.user` becomes a
+child table later — cheap to extend, not blocking anything downstream.
+
+**Verified:** `bench migrate` synced cleanly; 4/4 new Placement tests + 6/6 new portal API
+tests (catalog country-filtering, atomic select, cross-agency invisibility, double-selection
+rejection, cross-country rejection, non-Foreign-Agency rejection) — 31/31 total across the
+whole app.
+
+**Not yet done (deferred):** Muayena's direct-to-Selected entry path (no portal, contract
+already in hand) is Step 4, alongside the contract-parsing utility that fills
+`contract_signed_date` for both tracks.

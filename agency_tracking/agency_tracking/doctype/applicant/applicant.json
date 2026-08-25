@@ -44,7 +44,8 @@
   "musaned_sec",
   "musaned_status",
   "lifecycle_sec",
-  "status"
+  "status",
+  "active_placement"
  ],
  "fields": [
   {
@@ -279,6 +280,15 @@
    "in_standard_filter": 1,
    "label": "Status",
    "options": "Draft\nRegistered\nCV Generated",
+   "read_only": 1
+  },
+  {
+   "description": "The global exclusivity lock (Part A.2 Stage 4). Set only by portal_api.select_candidate() or the Step 4 contract-upload path — never editable directly.",
+   "fieldname": "active_placement",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Active Placement",
+   "options": "Placement",
    "read_only": 1
   }
  ],
