@@ -5,6 +5,10 @@ import frappe
 
 # Part G RBAC table, pre-declared in full (see BUILD_LOG.md "Standing decisions") — the
 # roles that don't have logic attached yet simply sit unused until their build step.
+# "Communication Manager" isn't in the master spec's original Part G table — it's introduced by
+# the addendum ("Agencies talk only to Communication Manager"), which explicitly overrides/
+# extends Part G. Added here at Step 12 rather than pre-declared with the rest in Step 1,
+# since it didn't exist in the spec version Step 1 was built against.
 ROLES = [
 	"Recruitment/Intake",
 	"Clearance Officer",
@@ -14,6 +18,7 @@ ROLES = [
 	"Manager",
 	"Admin",
 	"Foreign Agency",
+	"Communication Manager",
 ]
 
 

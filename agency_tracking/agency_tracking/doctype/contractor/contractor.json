@@ -10,6 +10,7 @@
   "country",
   "col_break_contractor",
   "user",
+  "communication_manager",
   "finance_sec",
   "batch_mode",
   "batch_threshold",
@@ -47,6 +48,13 @@
    "options": "User",
    "reqd": 1,
    "unique": 1
+  },
+  {
+   "description": "addendum-post-spec-refinements.md: per-contractor routing for agency→Communication-Manager chat, for continuity. Falls back to round-robin among all Communication Manager users when unset.",
+   "fieldname": "communication_manager",
+   "fieldtype": "Link",
+   "label": "Communication Manager",
+   "options": "User"
   },
   {
    "collapsible": 1,

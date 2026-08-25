@@ -25,7 +25,7 @@ see `[[project-agency-tracking-gap-analysis]]` memory for why it wasn't reused).
 - [x] 9. Reconciliation tool
 - [x] 10. Complaints
 - [x] 11. Notification pipeline
-- [ ] 12. Chat
+- [x] 12. Chat
 - [ ] 13. Reporting/dashboards
 - [ ] 14. Frontend (SPA)
 - [ ] 15. Deployment hardening
@@ -600,3 +600,65 @@ build and is flagged as such in `notification_engine.py`'s own module docstring.
 **Not yet done (deferred):** Chat (Step 12) will reuse this exact pipeline per Part E ("Chat adds
 `frappe.publish_realtime`... falling through to the same queued path when not [online]") — no
 chat-specific doctypes or logic were built in this step.
+
+## Step 12 — what was built
+
+Added `Communication Manager` to `install.py`'s role list — it isn't in the master spec's
+original Part G table, only introduced by the addendum ("Agencies talk only to Communication
+Manager"), which explicitly overrides/extends Part G. `Chat Thread` (`thread_type`
+Agency/Internal, `contractor` — the isolation boundary for Agency threads, `context_type`/
+`context_reference`, child `participants`) + `Chat Thread Participant` (`user`,
+`last_read_at` — read receipts as a per-participant marker, not a separate doctype) + `Chat
+Message` (`sender`, `message`, `mentioned_applicant`/`mentioned_placement`). `Contractor` gained
+`communication_manager` (validated to actually hold that role, same pattern as the existing
+`user`/Foreign-Agency check).
+
+**Resolved the addendum's explicitly-flagged open design call** ("round-robin or per-contractor
+mapping — pick before building create_agency_thread"): per-contractor mapping when
+`Contractor.communication_manager` is configured (continuity), round-robin among all
+Communication Manager users otherwise (so an unconfigured contractor is never simply blocked).
+Documented as a judgment call in `chat_engine.py`'s own docstring, not silently decided.
+
+**Every rule from the addendum's Chat section is enforced, not just documented:**
+`validate_thread_participants()` (agencies can't message each other or anyone but a
+Communication Manager/Admin); Agency threads are structurally fixed at exactly two participants
+(`Chat Thread.validate()`) and `add_participant()` refuses them outright — "adding participants
+to an agency thread stays restricted," enforced at both the API and doctype level, not just one;
+`@mentions` check the mentioned record's own read permission before allowing the message
+(`send_message`) — "the mention is a link, not a permission grant"; `get_placement_officers()`
+is transcribed from the addendum's own code snippet.
+
+**The addendum's explicit test requirement was honored, not skipped.** "Agencies cannot know
+other agencies exist... this needs an explicit test, not just reliance on the participant
+filter" — `test_agency_cannot_see_another_agencys_thread` creates two agencies with their own
+threads and asserts, from Agency B's own session, that Agency A's thread is absent from
+`list_threads()` *and* that `get_thread_messages`/`send_message` against it both raise
+`PermissionError`. `list_threads()` itself carries the belt-and-suspenders the addendum implies:
+a Foreign Agency caller gets filtered by their own `contractor` in addition to the participant
+filter, not instead of it.
+
+**Two real bugs caught and fixed, both instances of lessons already learned earlier in this
+build, not new categories:** (1) `validate_thread_participants()`'s first draft, transcribed
+close to the addendum's literal pseudocode, checked `"Foreign Agency" in frappe.get_roles(...)`
+— which breaks for Administrator (every role, confirmed back in Step 4) and wrongly rejected an
+agency messaging Administrator as "agencies cannot message each other." Fixed the same way Step
+4's `upload_contract()` was: key off an actual linked `Contractor` record, not role membership.
+(2) A test assumed round-robin routing would land on the specific Communication Manager it had
+just created — false by the time this test runs in a shared suite with many prior tests' managers
+already accumulated. Fixed by pinning `Contractor.communication_manager` explicitly instead of
+relying on round-robin's outcome, the same "don't assume isolation the shared DB doesn't
+actually give you" lesson from Steps 7, 9, and 11.
+
+**Verified:** `bench migrate` clean; 26 new tests (thread-shape invariants, participant
+validation rules including the Administrator edge case, per-contractor vs. round-robin routing,
+thread reopening instead of duplication, the full agency↔manager and internal staff↔staff message
+flows, mention permission checks, read-receipt scoping to the caller's own row, and the
+addendum's explicit isolation test) — 185/185 total across the app.
+
+**Not yet done (deferred):** `frappe.publish_realtime` is called unconditionally alongside
+`notify()` on every message (Part E: "falling through to the same queued path when not
+[online]") — actual live browser presence/online-detection was not built or verified, consistent
+with this build's running honesty standard about what's genuinely exercised (Steps 8/9/11) vs.
+plausible-looking. The realtime call itself is a real, correct Frappe API call; what's unverified
+is whether a real connected client actually receives it end-to-end, which needs a live socketio
+client to exercise (Step 14, when a real frontend exists to test against).
