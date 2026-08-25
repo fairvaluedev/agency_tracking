@@ -19,7 +19,10 @@
   "medical_2_status",
   "commission_sec",
   "manual_commission_amount",
-  "manual_commission_currency"
+  "manual_commission_currency",
+  "is_free_replacement",
+  "free_replacement_for_complaint",
+  "departed_on"
  ],
  "fields": [
   {
@@ -122,6 +125,28 @@
    "fieldtype": "Select",
    "label": "Manual Commission Currency",
    "options": "\nSAR\nKWD\nUSD\nETB\nAED\nQAR"
+  },
+  {
+   "default": "0",
+   "description": "Part A.4: a replacement selected within the 3-month post-departure window is free — commission was already collected on the original placement. Set only via portal_api.select_candidate()'s free_replacement_for_complaint parameter.",
+   "fieldname": "is_free_replacement",
+   "fieldtype": "Check",
+   "label": "Free Replacement",
+   "read_only": 1
+  },
+  {
+   "fieldname": "free_replacement_for_complaint",
+   "fieldtype": "Link",
+   "label": "Free Replacement For Complaint",
+   "options": "Complaint",
+   "read_only": 1
+  },
+  {
+   "description": "Stamped automatically the first time this Placement reaches Departed — the anchor for the 3-month free-replacement window (Part A.4), not the same as the record's modified timestamp, which can move for unrelated reasons afterward.",
+   "fieldname": "departed_on",
+   "fieldtype": "Datetime",
+   "label": "Departed On",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,

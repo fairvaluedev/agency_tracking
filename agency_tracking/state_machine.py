@@ -34,6 +34,13 @@ ALLOWED_TRANSITIONS = {
 		("Stamped", "Ticketed"),
 		("Ticketed", "Departed"),
 	},
+	"Complaint": {
+		("New", "Unresolved"),
+		("Unresolved", "Resolved"),
+		("Unresolved", "Returned - Free Replacement Required"),
+		("Unresolved", "Escalated"),
+		("Unresolved", "Dismissed"),
+	},
 }
 
 # (from_status, to_status) -> callable(doc) -> bool. Applicant's Draft->Registered move has no
@@ -186,3 +193,22 @@ def all_mandatory_clearance_steps_complete(placement) -> bool:
 
 
 STAGE_GATES[("Processing", "Stamped")] = all_mandatory_clearance_steps_complete
+
+
+# --- Free-replacement window gate (Part A.4 / Step 10) ---
+# "A 3-month window from departure, during which a returned worker triggers a free replacement
+# obligation." Measured from Placement.departed_on (stamped once, on first entry to Departed —
+# see Placement.stamp_departed_on), not the complaint's own creation date.
+
+FREE_REPLACEMENT_WINDOW_DAYS = 90
+
+
+def within_free_replacement_window(complaint) -> bool:
+	placement = frappe.get_doc("Placement", complaint.placement)
+	if not placement.departed_on:
+		return False
+	days_since_departure = (frappe.utils.now_datetime() - placement.departed_on).days
+	return days_since_departure <= FREE_REPLACEMENT_WINDOW_DAYS
+
+
+STAGE_GATES[("Unresolved", "Returned - Free Replacement Required")] = within_free_replacement_window

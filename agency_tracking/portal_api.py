@@ -63,10 +63,16 @@ def list_portal_candidates():
 
 
 @frappe.whitelist()
-def select_candidate(applicant_name):
+def select_candidate(applicant_name, free_replacement_for_complaint=None):
 	"""Part A.2 Stage 4: atomic, globally exclusive selection. The instant one agency selects
 	a candidate, they vanish from every other agency's view — enforced here with a row lock
 	(SELECT ... FOR UPDATE) so two concurrent selections can't both see the candidate as free.
+
+	free_replacement_for_complaint (Part A.4, Step 10): a worker who returned within the
+	3-month window entitles the same contractor to one free replacement selection. The
+	replacement "goes through the exact same journey from Stage 4 onward as any newly selected
+	candidate" (business-workflow-srs.md) — i.e. this same function — just flagged so
+	finance_engine.accrue_commission() skips billing for it.
 	"""
 	contractor = _get_contractor_for_session_user()
 
@@ -80,6 +86,22 @@ def select_candidate(applicant_name):
 		)
 	if applicant.destination_country != contractor.country:
 		frappe.throw("Not permitted.", frappe.PermissionError)
+
+	if free_replacement_for_complaint:
+		complaint = frappe.get_doc("Complaint", free_replacement_for_complaint)
+		if complaint.status != "Returned - Free Replacement Required":
+			frappe.throw(
+				f"{free_replacement_for_complaint} is not an approved free-replacement complaint "
+				f"(status: {complaint.status}).",
+				frappe.ValidationError,
+			)
+		if complaint.contractor != contractor.name:
+			frappe.throw("Not permitted.", frappe.PermissionError)
+		if frappe.db.exists("Placement", {"free_replacement_for_complaint": free_replacement_for_complaint}):
+			frappe.throw(
+				f"{free_replacement_for_complaint}'s free replacement has already been used.",
+				frappe.ValidationError,
+			)
 
 	# Row lock held until this request's transaction commits — a second, concurrent
 	# select_candidate() for the same applicant blocks here until the first is done, then
@@ -100,6 +122,8 @@ def select_candidate(applicant_name):
 			"destination_country": applicant.destination_country,
 			"status": "Selected",
 			"cv_record": _get_latest_cv_record(applicant_name),
+			"is_free_replacement": 1 if free_replacement_for_complaint else 0,
+			"free_replacement_for_complaint": free_replacement_for_complaint,
 		}
 	).insert(ignore_permissions=True)
 

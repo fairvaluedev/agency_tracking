@@ -120,6 +120,11 @@ def get_contractor_default_rate(contractor_name, destination_country):
 
 
 def accrue_commission(placement, actor=None):
+	if placement.is_free_replacement:
+		# Part A.4: "commission fee waived for that one cycle" — already collected on the
+		# original placement this one replaces. Not an idempotency no-op; there was never
+		# going to be a commission transaction for this placement at all.
+		return None
 	if frappe.db.exists(
 		"Applicant Transaction",
 		{"placement": placement.name, "transaction_type": "Commission", "status": "Active"},

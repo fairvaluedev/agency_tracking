@@ -23,7 +23,7 @@ see `[[project-agency-tracking-gap-analysis]]` memory for why it wasn't reused).
 - [x] 7. Clearance Step + ToDo permission scoping + LMIS→Ticketing→Departure auto-chain
 - [x] 8. Financial ledger (income/expense, FX, accrual, batching, visibility wall)
 - [x] 9. Reconciliation tool
-- [ ] 10. Complaints
+- [x] 10. Complaints
 - [ ] 11. Notification pipeline
 - [ ] 12. Chat
 - [ ] 13. Reporting/dashboards
@@ -488,3 +488,58 @@ never collide on `total_amount_birr` — a general lesson for any future test ne
 unambiguous match, ambiguous match correctly left unmatched, reference-text disambiguation,
 already-settled batches excluded, end-to-end upload→parse→match, manual-match escape hatch, and
 permission checks on both) — 119/119 total across the app.
+
+## Step 10 — what was built
+
+`Complaint` (Part B: linked to `Placement`, resolution states — `New`/`Unresolved` then one of
+`Resolved`/`Returned - Free Replacement Required`/`Escalated`/`Dismissed`, `Dismissed` requiring
+`resolution_notes` per business-workflow-srs.md). Default doctype sort is `creation asc` (oldest
+first) matching the spec's explicit UX requirement directly, backed by `complaint_api.py`'s
+`list_unresolved_complaints()` for the same guarantee at the API layer. `state_machine.py` gained
+Complaint's transition graph and a new gate, `within_free_replacement_window` (Part A.4's 3-month
+clock, measured from `Placement.departed_on` — a new field, stamped once by
+`Placement.stamp_departed_on()` the first time a placement reaches `Departed`, deliberately not
+reusing `modified` since that timestamp can move for unrelated reasons afterward).
+
+**Resolution is genuinely restricted, not just documented as restricted.** Master spec Part A.5:
+"Only Complaint Manager and Admin can move resolution status" — `complaint_api.py` enforces this
+literally (not carving out an exception for the New→Unresolved acknowledgment step, since the
+spec's sentence is unqualified). `create_complaint()` is broader (any recognized internal staff
+role, or the owning agency's own linked Contractor for their own placement only) since creation
+isn't the restricted action, resolution is.
+
+**Free replacement wired all the way through, not just as a status label.** `Placement` gained
+`is_free_replacement`, `free_replacement_for_complaint`. `portal_api.select_candidate()` gained
+an optional `free_replacement_for_complaint` parameter — validated against the complaint's status
+(must be exactly `Returned - Free Replacement Required`), the calling contractor (must be the
+same one the complaint belongs to), and single-use (a second attempt against an already-consumed
+complaint is rejected). This reuses the *exact same* selection function every Standard-track
+candidate goes through, per business-workflow-srs.md's own instruction ("goes through the exact
+same journey from Stage 4 onward as any newly selected candidate") — not a parallel, bespoke
+"replacement" code path. `finance_engine.accrue_commission()` skips billing entirely for
+`is_free_replacement` placements (not an idempotency no-op — there was never going to be a
+commission transaction for this one).
+
+**Real inconsistency caught before it shipped, not after:** the first cut of
+`resolve_complaint()` restricted every call — ordinary resolution *and* Manager Override alike —
+to `{Complaint Manager, Admin}`. But `transition()`'s own override enforcement requires `{Manager,
+Admin}` specifically (established in Step 6, applied uniformly to every gate in this build). A
+plain Manager — who business-workflow-srs.md's general override principle ("Manager/Owner — can
+override a blocked step... always with a written reason") clearly means to cover — would pass
+`transition()`'s internal check but never reach it, rejected by `resolve_complaint()`'s own gate
+first. Fixed by widening `resolve_complaint()`'s allowed roles to include Manager specifically
+when an `override_reason` is supplied, keeping ordinary (non-override) resolution moves at the
+literal Complaint-Manager-and-Admin-only reading of Part A.5. Caught by writing the override test
+itself and noticing the roles wouldn't line up — a reminder that a spec sentence naming one role
+for the normal case doesn't override a *different*, already-established rule for the exceptional
+case; the two need to be reconciled explicitly, not left to whichever check happens to run first.
+
+**Verified:** `bench migrate` clean; 21 new tests (Dismissed reason requirement, complaint
+creation permission split between agency/internal-staff/nobody, oldest-first ordering,
+resolution-role restriction, the free-replacement window gate both inside and outside the 90-day
+boundary — including via Manager Override — and the full select→bill-skip and single-use-credit
+flows) — 140/140 total across the app.
+
+**Not yet done (deferred):** notifying anyone that a complaint was logged, or that a free
+replacement is now available, is Step 11 (Notification pipeline) — Complaints exist and resolve
+correctly now, but nothing pushes a message about them yet.

@@ -3,10 +3,12 @@
 
 import frappe
 from frappe.model.document import Document
+from frappe.utils import now_datetime
 
 
 class Placement(Document):
 	def validate(self):
+		self.stamp_departed_on()
 		applicant = frappe.get_doc("Applicant", self.applicant)
 
 		# Standard: only past CV Generated (portal-selected, Step 3). Muayena: Registered is
@@ -34,3 +36,7 @@ class Placement(Document):
 				"Placement destination_country must match the Applicant's destination_country.",
 				frappe.ValidationError,
 			)
+
+	def stamp_departed_on(self):
+		if self.status == "Departed" and not self.departed_on:
+			self.departed_on = now_datetime()
