@@ -18,7 +18,7 @@ see `[[project-agency-tracking-gap-analysis]]` memory for why it wasn't reused).
 - [x] 2. CV generation + Musaned gate wired in
 - [x] 3. Portal + atomic selection + `active_placement` locking
 - [x] 4. Contract parsing (both tracks) → Placement creation
-- [ ] 5. Corridor Definition engine (Saudi + Kuwait)
+- [x] 5. Corridor Definition engine (Saudi + Kuwait)
 - [ ] 6. transition() + gate table + Manager Override (Medical 2 gate)
 - [ ] 7. Clearance Step + ToDo permission scoping + LMIS→Ticketing→Departure auto-chain
 - [ ] 8. Financial ledger (income/expense, FX, accrual, batching, visibility wall)
@@ -229,3 +229,31 @@ shared venv — now properly declared).
 **Not yet done (deferred):** no gate/transition wiring for Placement's own lifecycle yet
 (Selected -> Processing -> ...) — that's Corridor Definition (Step 5) and the full gate table
 (Step 6).
+
+## Step 5 — what was built
+
+`Corridor Definition` (one per `destination_country`, unique) + child table `Corridor Step`
+(`step_type`, `sequence_order`, `is_mandatory`) — exactly Part B's schema. `validate()` enforces
+unique `sequence_order` and unique `step_type` within one corridor. New `corridor_engine.py`:
+`get_corridor_steps()`, `get_first_step_type()`, `get_next_step_type()`, `is_last_step()` — all
+pure data lookups, no country names hardcoded anywhere in the module. `install.py` seeds Saudi
+Arabia (LMIS Clearance → Taeshir → Injaz → Embassy/Wakala) and Kuwait (LMIS Police Clearance →
+Telesign → Kuwait Embassy → LMIS Work Permit) per the business SRS's Stage 5 sequences, all
+steps mandatory (the spec doesn't call out an optional step in either corridor yet — `Corridor
+Step.is_mandatory` exists and works, just nothing sets it to 0 in the seed data).
+
+**Proved the actual design goal, not just built the schema.** Part A.3's whole point is "new
+corridors are added as data, never a code deployment" — `test_new_corridor_added_as_pure_data_no_code_change`
+inserts a throwaway UAE corridor with an optional third step, using the exact same
+`corridor_engine` functions already exercised against the seeded Saudi/Kuwait data, and gets
+correct ordering/mandatory-flag results with zero code changes. That test is the actual
+acceptance criterion for this step, not incidental coverage.
+
+**Verified:** `bench migrate` clean; 8 new tests (3 Corridor Definition invariants, 5 corridor
+engine, including the no-code-change proof) — 54/54 total. Manually ran `create_corridors()`
+once via console (same catch-up situation as Step 1's roles — this site was installed before
+the seeding code existed); confirmed `Saudi Arabia` and `Kuwait` both exist with correct steps.
+
+**Not yet done (deferred):** nothing in this step touches Placement or Clearance Step yet —
+Corridor Definition is pure reference data until Step 7 (Clearance Step) starts creating
+per-candidate step records from it, gated by Step 6's expanded `STAGE_GATES`.
