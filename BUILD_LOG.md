@@ -15,7 +15,7 @@ see `[[project-agency-tracking-gap-analysis]]` memory for why it wasn't reused).
 ## Status: Part I sequence
 
 - [x] 1. Core identity + track-aware field floor (Applicant, Standard/Muayena, Musaned gate stub)
-- [ ] 2. CV generation + Musaned gate wired in
+- [x] 2. CV generation + Musaned gate wired in
 - [ ] 3. Portal + atomic selection + `active_placement` locking
 - [ ] 4. Contract parsing (both tracks) → Placement creation
 - [ ] 5. Corridor Definition engine (Saudi + Kuwait)
@@ -110,3 +110,33 @@ to confirm the real API path works, not just the unit tests in isolation.
 - `Country` values used for `destination_country`/`nationality` rely on Frappe's shipped core
   Country doctype (standard ISO names e.g. "Saudi Arabia", "Kuwait", "Ethiopia") — no new
   doctype needed for this.
+
+## Step 2 — what was built
+
+`agency_tracking/agency_tracking/doctype/cv_record/` — `cv_record.json` (Submittable,
+`applicant` Link, `generated_on`/`generated_by` auto-set on insert) + `cv_record.py` +
+`test_cv_record.py`. Plus `cv_api.py` (`generate_cv`, Part F module-scoped whitelisted
+function). `state_machine.py` gained the `("Registered", "CV Generated")` edge and its gate
+(`cv_generation_gate`), which composes the existing `musaned_gate_passed` stub with an
+entry-track check — this is the "wired in" part of the step's name. CV Record's own
+`validate()` independently re-checks Standard-track + Registered-status + Musaned gate with
+specific error messages (checked first, before `transition()`'s generic gate runs as a
+backstop) — belt-and-braces per the production-quality directive: a CV Record should never be
+able to exist for a candidate that violates these invariants, regardless of which code path
+created it.
+
+**Scope call:** did not build actual CV/dossier PDF rendering (the "two-page CV" visual
+output) — the technical spec (Part B/C/F) only requires `CV Record` to exist as a submittable
+audit artifact gating the Applicant's status move; the visual document is a presentation
+concern more naturally handled by a Frappe Print Format or the Step 14 SPA, not called out
+anywhere in the state-machine/RBAC spec that's been the basis for every other decision so far.
+Flagging so it isn't mistaken for an oversight — build if/when it's actually needed.
+
+**Verified:** `bench migrate` synced cleanly; 6/6 new tests passing, all 15 Step-1 tests still
+passing (21/21 total) — Kuwait Standard candidates generate CVs with no Musaned involvement,
+Saudi Standard candidates are blocked until `ALTEYAZECHEM`, Muayena and un-Registered
+Applicants are rejected outright.
+
+**Not yet done (deferred):** portal visibility of CV-Generated candidates is Step 3's
+concern (that's literally what "Portal" means in Step 3's name) — nothing here exposes CV
+Records to any agency-facing query yet.

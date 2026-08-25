@@ -18,13 +18,15 @@ import frappe
 ALLOWED_TRANSITIONS = {
 	"Applicant": {
 		("Draft", "Registered"),
+		("Registered", "CV Generated"),
 	},
 }
 
-# (from_status, to_status) -> callable(doc) -> bool. Empty for now — Applicant's
-# Draft->Registered move has no cross-doctype gate, just the field-floor/medical check
-# already enforced in Applicant.validate(). Real gates (Te'shsir->Injaz on medical FIT,
-# Ticketed->Departed on Medical 2, etc.) are added at Step 6 once those stages exist.
+# (from_status, to_status) -> callable(doc) -> bool. Applicant's Draft->Registered move has no
+# cross-doctype gate (just the field-floor/medical check already in Applicant.validate()).
+# Registered->CV Generated is gated on cv_generation_gate (Standard track + Musaned, Step 2).
+# Further gates (Te'shsir->Injaz on medical FIT, Ticketed->Departed on Medical 2, etc.) are
+# added at Step 6 once those stages exist.
 STAGE_GATES = {}
 
 
@@ -56,8 +58,8 @@ def transition(doc, new_status, actor=None):
 
 
 # --- Musaned gate (Part A.2) ---
-# Stub per Part I Step 1: the field vocabulary and check exist now; nothing calls this yet.
-# Wired into CV generation as a hard block in Step 2, matching Part I's naming of that step.
+# Wired into CV generation (Step 2): registered in STAGE_GATES below, and CV Record.validate()
+# also checks it directly for a clearer, CV-specific error message.
 
 MUSANED_APPROVED_STATUS = "ALTEYAZECHEM"
 MUSANED_BLOCKED_STATUS = "TEYZALECH"
@@ -73,3 +75,14 @@ def musaned_gate_passed(applicant) -> bool:
 	if applicant.destination_country != "Saudi Arabia":
 		return True
 	return applicant.musaned_status == MUSANED_APPROVED_STATUS
+
+
+def cv_generation_gate(applicant) -> bool:
+	"""Registered -> CV Generated (Part A.2 Stage 3): Standard track only, and subject to
+	the Musaned gate above."""
+	if applicant.entry_track != "Standard":
+		return False
+	return musaned_gate_passed(applicant)
+
+
+STAGE_GATES[("Registered", "CV Generated")] = cv_generation_gate
