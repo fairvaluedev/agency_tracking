@@ -149,7 +149,16 @@ permission_query_conditions = {
 scheduler_events = {
 	"daily": [
 		"agency_tracking.finance_engine.fetch_daily_fx_rates",
+		"agency_tracking.watchdogs.medical_expiry_watchdog",
+		"agency_tracking.watchdogs.contract_age_watchdog",
 	],
+	"cron": {
+		# Twice a week (business-workflow-srs.md: "go out automatically twice a week until
+		# it's paid") — Monday and Thursday mornings.
+		"0 9 * * 1,4": [
+			"agency_tracking.watchdogs.wakala_reminder_watchdog",
+		],
+	},
 }
 
 # Testing
@@ -179,6 +188,13 @@ before_tests = "agency_tracking.install.before_tests"
 # -----------------------------------------------------------
 
 # ignore_links_on_delete = ["Communication", "ToDo"]
+
+# Login Events
+# ------------
+# Part E: "retried on next login" — the other half of the offline-delivery guarantee (the
+# other half is new Push Subscription registration, handled directly in
+# notification_api.subscribe_to_push).
+on_login = ["agency_tracking.notification_engine.retry_pending_notifications_on_login"]
 
 # Request Events
 # ----------------

@@ -24,7 +24,7 @@ see `[[project-agency-tracking-gap-analysis]]` memory for why it wasn't reused).
 - [x] 8. Financial ledger (income/expense, FX, accrual, batching, visibility wall)
 - [x] 9. Reconciliation tool
 - [x] 10. Complaints
-- [ ] 11. Notification pipeline
+- [x] 11. Notification pipeline
 - [ ] 12. Chat
 - [ ] 13. Reporting/dashboards
 - [ ] 14. Frontend (SPA)
@@ -543,3 +543,60 @@ flows) — 140/140 total across the app.
 **Not yet done (deferred):** notifying anyone that a complaint was logged, or that a free
 replacement is now available, is Step 11 (Notification pipeline) — Complaints exist and resolve
 correctly now, but nothing pushes a message about them yet.
+
+## Step 11 — what was built
+
+`Notification Config` (single doctype: VAPID keys, WhatsApp Cloud API credentials,
+`contract_age_threshold_days`), `Push Subscription` (per-device, Part B), `Comms Log` (the
+delivery queue, Part B). `notification_engine.py:notify()` transcribed directly from Part E's
+pseudocode — insert a `Pending` `Comms Log` row, attempt delivery immediately,
+`attempt_push_delivery()` never raises (catches everything, records `Failed` + the error +
+increments `attempts`). Retried on next login (`hooks.py: on_login`) and on new Push Subscription
+registration (`notification_api.subscribe_to_push`) — Part E's "notify even if offline, deliver
+once back online," both halves wired, not just one.
+
+**`notify()` is deliberately not whitelisted.** The first instinct (matching Part E's function
+signature literally) was to expose it directly, but that would let any authenticated user
+notify *any other* user by name — a real vector for harassment/spam that the rest of this
+build's permission discipline would otherwise contradict. Caught before writing a single test
+against it, by asking "who's allowed to call this with an arbitrary `user` argument?" the same
+way every other whitelisted function in this build has been scoped. Only
+`notification_api.subscribe_to_push` (self-service, `frappe.session.user` only) and the manual
+watchdog trigger are client-facing; `notify()` itself is called only from other engine code
+(`clearance_engine`, `watchdogs.py`, and Step 12's chat).
+
+**Assignment alerts**: `clearance_engine.assign_clearance_step()` and the LMIS→Ticketing→
+Departure auto-chain (Step 7) both now call `notify()` — the same event that creates a ToDo also
+queues a notification, so nobody's assignment sits silently invisible until they happen to open
+Desk.
+
+**Three watchdogs** (`watchdogs.py`, Part E's named list, scheduled via `hooks.py`):
+`medical_expiry_watchdog` (Applicant.medical_expiry_date at exactly 14/10/7/3/1 days out —
+"repeatedly counting down... then closer warnings," daily), `contract_age_watchdog`
+(`Placement.contract_signed_date` older than the admin-configured threshold and not yet
+Departed, daily), `wakala_reminder_watchdog` (unpaid `Embassy/Wakala` Clearance Steps, both Push
+and WhatsApp per the spec's explicit pairing, `hooks.py` cron `"0 9 * * 1,4"` for "twice a
+week"), plus `notification_api.trigger_wakala_reminder` as the manual escape hatch
+business-workflow-srs.md explicitly calls for. Recipient resolution reuses Step 7's
+`get_lmis_officer()` — no new "who owns this placement" concept invented; a placement with no
+assigned officer yet is silently skipped rather than guessing a recipient.
+
+**Real bug caught and fixed by the test suite itself, not by inspection:** the first watchdog
+tests manually created an `Embassy/Wakala` Clearance Step for assertions to check against — but
+the Saudi corridor (Step 7) already auto-creates one when a placement enters Processing. Two
+unpaid Wakala steps on the same placement meant the watchdog correctly found and notified about
+both, and a test asserting "exactly one push notification" failed — correctly identifying the
+test fixture as wrong, not the watchdog. Fixed by using the corridor's own auto-created step in
+the fixture instead of inserting a redundant second one.
+
+**Verified:** `bench migrate` clean; 19 new tests, including the queue/retry mechanics (a failed
+delivery's error message changes from "no subscription" to a VAPID-config error after
+registering one, proving the retry actually re-ran rather than being silently skipped) and a
+mocked `pywebpush.webpush` call to exercise the success-path logic without needing real
+credentials — 159/159 total across the app. Consistent with Steps 8/9's honesty standard: actual
+push/WhatsApp delivery over a real network, with real credentials, has not been exercised in this
+build and is flagged as such in `notification_engine.py`'s own module docstring.
+
+**Not yet done (deferred):** Chat (Step 12) will reuse this exact pipeline per Part E ("Chat adds
+`frappe.publish_realtime`... falling through to the same queued path when not [online]") — no
+chat-specific doctypes or logic were built in this step.

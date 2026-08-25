@@ -10,6 +10,7 @@
 import frappe
 
 from agency_tracking.corridor_engine import get_corridor_steps
+from agency_tracking.notification_engine import notify
 from agency_tracking.state_machine import TRANSITION_SIDE_EFFECTS
 
 # Step types considered part of the "LMIS family" across corridors — matched by prefix rather
@@ -39,6 +40,8 @@ def assign_clearance_step(clearance_step_name, user):
 			"status": "Open",
 		}
 	).insert(ignore_permissions=True)
+
+	notify(user, "clearance_step_assigned", {"clearance_step": clearance_step_name})
 
 
 def create_clearance_steps(placement):
@@ -101,6 +104,7 @@ def _chain_todo_to_lmis_officer(placement, description):
 			"status": "Open",
 		}
 	).insert(ignore_permissions=True)
+	notify(officer, "placement_todo_assigned", {"placement": placement.name, "description": description})
 
 
 def chain_lmis_officer_to_ticketing(placement):
