@@ -27,7 +27,7 @@ see `[[project-agency-tracking-gap-analysis]]` memory for why it wasn't reused).
 - [x] 11. Notification pipeline
 - [x] 12. Chat
 - [x] 13. Reporting/dashboards
-- [ ] 14. Frontend (SPA)
+- [~] 14. Frontend (SPA) — foundation + 2 of ~11 screens built and verified; rest not started
 - [ ] 15. Deployment hardening
 
 ## Standing decisions (apply to every step, not re-litigated per step)
@@ -711,3 +711,90 @@ from this build's usual per-test-tag isolation strategy, because these functions
 the *entire* shared test-run database by date range, so hundreds of other tests' same-day
 fixtures would otherwise inflate every assertion regardless of how uniquely each test's own
 records were tagged — 193/193 total across the app.
+
+## Step 14 — partial: a real, verified foundation + 2 of ~11 screens, not the full SPA
+
+Scoped deliberately, flagged rather than silently under-delivered: a full production SPA with
+one screen per API module (11 modules: applicant/cv/portal/placement/clearance/finance/
+reconciliation/complaint/notification/chat/report) is a multi-day project on its own, on top of
+everything already built. What's here is genuinely built and genuinely verified against the live
+backend — not a mockup — covering the two screens Part I's own build sequence names first
+("starting with intake and portal — highest daily volume, finance and dashboard last").
+
+**What was built:** `frontend/` — Vite + React + TypeScript. `src/api/client.ts` (session-cookie
+auth, CSRF token handling, one typed wrapper per whitelisted method actually called), `src/
+context/AuthContext.tsx` (login/logout/current-user, survives a page refresh via the existing
+session cookie), `src/pages/Login.tsx`, `src/pages/Intake.tsx` (Recruitment/Intake: the full
+Standard-track field floor from Step 1, `create_applicant` → `register_applicant` →
+`generate_cv` against the real API), `src/pages/Portal.tsx` (Foreign Agency: `list_portal_
+candidates` → `select_candidate`, reloads after selection to prove the exclusivity lock against
+the live backend, not just trust the response). Routing is role-based conditional rendering off
+`auth_api.get_current_user()`'s real roles, not a hardcoded guess. New `auth_api.py`
+(`get_csrf_token`, `get_current_user`) — necessary plumbing Part F's session-cookie auth model
+implies but never names a doctype or step for; added here because this is the step that first
+needed it.
+
+**Verified with a real headless browser against the real running backend, not just curl or
+unit tests** — Playwright driving Chromium against `bench start`'s actual site
+(`agency-tracking.local`) and Vite's dev server, full login→create→register→generate-CV→logout→
+login-as-agency→browse→select→reload flow, screenshotted at every step. All 9 checks pass
+including zero console/network errors on the final run. Getting a working browser required
+downloading Chromium's missing shared libraries (`libnspr4`, `libnss3`, `libasound2`) via
+`apt-get download` + `dpkg-deb -x` into a local directory (`LD_LIBRARY_PATH`, not a system
+install) since `sudo` wasn't available — noted here since it's the kind of environment quirk a
+future session restarting from a clean container will hit again.
+
+**Three real bugs found by this verification, none of which curl/unit tests alone would have
+caught, all fixed:**
+
+1. **`AuthContext`'s cold-load bootstrap called `get_csrf_token()` before checking whether
+   anyone was even logged in.** `get_csrf_token` requires an authenticated session — every
+   anonymous visit to the login page produced a 403 in the browser console. Reordering alone
+   didn't fix it: `get_current_user()` *also* wasn't `allow_guest`, so it 403'd too, just never
+   visibly, because the reordered code never got past the first call. Real fix:
+   `auth_api.get_current_user` is now `allow_guest=True` and returns `None` for a Guest session
+   (a normal 200, not a thrown exception) — a frontend's "is anyone logged in?" check is an
+   expected outcome, not an error condition, and should never look like one in the console.
+   `AuthContext` now only fetches the CSRF token once it knows there's an actual session.
+2. **The Frappe web server process doesn't hot-reload Python code.** The `allow_guest=True` fix
+   was correct on disk but invisible to the running `bench start` process, which had already
+   imported the old version — needed a full restart to take effect. Worth remembering: unlike
+   Vite (which recompiles on every request), a change to any `*_api.py`/doctype `.py` file needs
+   the web/worker processes restarted, not just re-saved.
+3. **Vite's dev server never picked up an edited file at all**, independent of the above — a
+   known WSL2 issue where chokidar-based file watchers don't reliably receive inotify events for
+   changes on the `/mnt/c/` (Windows-mounted) filesystem. The file was correct on disk; curling
+   Vite's own served module output showed it was still compiling and serving the *previous*
+   version. Fixed by killing and restarting the Vite process — not something `bench build` or
+   `bench migrate` would ever surface, only caught because the verification script re-ran
+   against the actual served bundle and the console errors didn't budge after a source fix that
+   should have eliminated them.
+
+**Also fixed in passing:** Desk's own compiled assets (`bench build`) had never actually
+succeeded since the app was scaffolded in Step 1 (`bench new-app`'s asset build failed on a
+missing `fast-glob` dependency at the time, noted then, never revisited since all subsequent
+work was API-only). The user noticed Desk's UI "bugging" independently of any of this
+frontend work; running `yarn install` at the Frappe app root (to get `socket.io` for realtime,
+needed for Step 12's chat delivery anyway) also happened to provide what `bench build` needed,
+and a clean `bench build` run fixed Desk's rendering.
+
+**Also caught and fixed: a shared-database contamination bug, one more instance of a lesson
+already learned repeatedly (Steps 7/9/11/12) but from a new source this time.** Manually seeding
+demo data directly against the live site (for browser verification) pollutes the *same* database
+`bench run-tests` uses — not just other tests within one run, but literally anything left behind
+by hand between runs. `test_portal_api.py::test_catalog_filters_by_contractor_country` asserted
+an exact candidate count of 1 for a given country; several manually-seeded Kuwait candidates
+broke that. Fixed the test properly (assert specific candidates present/absent, not a total
+count — `list_portal_candidates()` is correctly system-wide per country, so an exact-count
+assertion was always fragile against *any* other candidate existing, from any source), and
+cleaned up the manual demo data afterward, leaving one clean seeded candidate for future manual
+poking.
+
+**Not yet done:** the remaining ~9 screens (Clearance Officer queue, Finance/reconciliation,
+Complaints desk, Notification preferences, Chat, Reporting dashboards, Admin config for
+Corridor Definition/Contractor/Step Officer Mapping) — same established pattern (typed API
+client function + a page component), just not built yet. File upload for `photograph`/
+`passport_scan` is a plain URL text field, not a real multipart upload widget against Frappe's
+upload endpoint. No automated frontend tests (Playwright script here is a manual verification
+tool, not wired into CI). `frappe.publish_realtime` (Step 12) still unverified against an actual
+second connected client.
