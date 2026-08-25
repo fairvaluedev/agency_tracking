@@ -41,6 +41,17 @@ def after_install():
 	create_corridors()
 
 
+def before_tests():
+	"""Frappe's standard pre-test-suite hook (wired in hooks.py) — runs once before any test
+	module. Without this, whichever test module happens to run first alphabetically implicitly
+	determines whether seed data (roles, corridors) exists yet, which is exactly the ordering
+	bug this fixes: test_clearance_engine.py < test_corridor_engine.py alphabetically, so
+	clearance tests were running before corridor_engine's own tests had a chance to
+	self-seed via their create_corridors() calls."""
+	create_roles()
+	create_corridors()
+
+
 def create_roles():
 	for role_name in ROLES:
 		if frappe.db.exists("Role", role_name):

@@ -118,6 +118,7 @@ after_install = "agency_tracking.install.after_install"
 
 permission_query_conditions = {
 	"Process Event": "agency_tracking.agency_tracking.doctype.process_event.process_event.get_permission_query_conditions",
+	"Clearance Step": "agency_tracking.agency_tracking.doctype.clearance_step.clearance_step.get_permission_query_conditions",
 }
 
 # DocType Class
@@ -164,7 +165,7 @@ permission_query_conditions = {
 # Testing
 # -------
 
-# before_tests = "agency_tracking.install.before_tests"
+before_tests = "agency_tracking.install.before_tests"
 
 # Overriding Methods
 # ------------------------------

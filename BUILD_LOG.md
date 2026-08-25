@@ -20,7 +20,7 @@ see `[[project-agency-tracking-gap-analysis]]` memory for why it wasn't reused).
 - [x] 4. Contract parsing (both tracks) → Placement creation
 - [x] 5. Corridor Definition engine (Saudi + Kuwait)
 - [x] 6. transition() + gate table + Manager Override (Medical 2 gate)
-- [ ] 7. Clearance Step + ToDo permission scoping + LMIS→Ticketing→Departure auto-chain
+- [x] 7. Clearance Step + ToDo permission scoping + LMIS→Ticketing→Departure auto-chain
 - [ ] 8. Financial ledger (income/expense, FX, accrual, batching, visibility wall)
 - [ ] 9. Reconciliation tool
 - [ ] 10. Complaints
@@ -304,3 +304,66 @@ the app.
 
 **Not yet done (deferred):** the real Processing→Stamped gate, Clearance Step doctype, ToDo-based
 per-row permission scoping, and the LMIS→Ticketing→Departure auto-chain are all Step 7.
+
+## Step 7 — what was built
+
+`Clearance Step` (standalone, Part B: `placement`, `step_type`, `status`, dates, `reference_no`,
+`amount`, `payment_status`) + `Step Officer Mapping` (Part B's named support doctype:
+`step_type` → `default_officer`, config data, Manager/Admin only). New `clearance_engine.py`:
+`create_clearance_steps()` materializes one row per `Corridor Step` when a Placement enters
+Processing (reads `corridor_engine`, doesn't hardcode any country), auto-assigning a ToDo where
+a `Step Officer Mapping` exists. `clearance_api.py`: `start_clearance_step`/
+`complete_clearance_step` (assigned officer or Manager/Admin only — Part G's "per-row" scoping
+applies to writes, not just reads) and `reassign_clearance_step` (Manager/Admin only, Part A.2's
+"reassignable by a manager if needed").
+
+**ToDo-based permission scoping** (Part G: "Clearance Officer... cross-type, cross-candidate,
+per-row"): `Clearance Step.get_permission_query_conditions()` restricts non-Manager/Admin users
+to rows where an Open ToDo assigns them that exact row — nothing about step_type or which
+placement, purely "am I assigned this one." Wired into `hooks.py` the same way as Process
+Event's.
+
+**The real Processing→Stamped gate landed** (`all_mandatory_clearance_steps_complete`, deferred
+from Step 6): all `is_mandatory=1` Clearance Steps for the placement must be `Complete`.
+
+**LMIS→Ticketing→Departure auto-chain**: `TRANSITION_SIDE_EFFECTS` (new mechanism in
+`state_machine.py`, `(doctype, to_status) -> callable`, runs after a transition commits — same
+shape as `STAGE_GATES` but for orchestration instead of validation) registers
+`create_clearance_steps` on Placement reaching Processing, and `chain_lmis_officer_to_ticketing`/
+`_departure` on reaching Stamped/Ticketed — both look up whoever was assigned the LMIS-family
+Clearance Step (matched by `step_type` prefix, not a per-corridor exact-name list — "LMIS
+Clearance", "LMIS Police Clearance", "LMIS Work Permit" all match) and auto-create a ToDo
+against the Placement for that same officer.
+
+**Real bug caught and fixed before commit:** the first cut of `get_lmis_officer()` only looked
+at ToDos with `status="Open"`. By the time the chain actually fires (Stamped/Ticketed — i.e.
+after Processing is done), the LMIS step is normally already Complete and its ToDo Closed by
+`complete_clearance_step()`, so the officer lookup always returned `None` and the chain silently
+did nothing. Fixed by dropping the status filter and taking the most recent ToDo instead —
+"officer holding LMIS" means whoever held it, not whoever currently has it open.
+
+**Real ordering bug caught and fixed:** `test_clearance_engine.py`'s tests need the Saudi/Kuwait
+corridors to exist, but corridor seeding had only ever happened as a side effect of
+`test_corridor_engine.py`'s own tests calling `create_corridors()`. Alphabetically,
+`test_clearance_engine` < `test_corridor_engine`, so the clearance tests ran first and failed
+against unseeded corridors. Fixed properly, not by sprinkling seed calls into every helper:
+added `install.py:before_tests()` wired to Frappe's standard `before_tests` hook, so roles and
+corridors exist before any test module runs, regardless of alphabetical order. This is also just
+the correct fix for the same latent risk in production-adjacent scripts, not merely a test
+artifact.
+
+**Also learned (empirically, not assumed):** `frappe.get_list()` raises `PermissionError` for a
+role with zero base doctype-permission grant — it does not silently return an empty list. A test
+that assumed the latter was corrected to expect the former.
+
+**Verified:** `bench migrate` clean; 26 new tests (Clearance Step permission scoping, corridor-
+driven step creation, auto-assignment, the auto-chain, the real Processing→Stamped gate, a full
+Selected→Departed lifecycle proof, and `clearance_api` permission checks) — 80/80 total across
+the app.
+
+**Not yet done (deferred):** flight-specific fields (reschedule history, cancel reason, the
+Ticketed→Stamped cancel-reversion edge) weren't built — Part I doesn't name them under any
+specific step and nothing downstream depends on them yet; can be added without disturbing this
+step's work if/when needed. `Step Officer Mapping` has no seeded data (deliberately — it's real
+staff-to-role config, not reference data like Corridor Definition, so there's nothing genuine to
+seed yet).

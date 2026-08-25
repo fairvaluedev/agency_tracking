@@ -8,6 +8,7 @@ from agency_tracking.agency_tracking.doctype.placement.test_placement import (
 	make_contractor,
 	registered_applicant,
 )
+from agency_tracking.clearance_api import complete_clearance_step
 from agency_tracking.state_machine import transition
 
 
@@ -30,6 +31,10 @@ def selected_placement(tag):
 def ticketed_placement(tag):
 	placement = selected_placement(tag)
 	transition(placement, "Processing")
+	# Step 7 made Processing->Stamped a real gate (all mandatory Clearance Steps complete) —
+	# clear the corridor's steps before advancing, same as clearance_engine tests do.
+	for step_name in frappe.get_all("Clearance Step", filters={"placement": placement.name}, pluck="name"):
+		complete_clearance_step(step_name)
 	transition(placement, "Stamped")
 	transition(placement, "Ticketed")
 	return placement

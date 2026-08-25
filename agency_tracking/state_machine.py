@@ -39,11 +39,17 @@ ALLOWED_TRANSITIONS = {
 # (from_status, to_status) -> callable(doc) -> bool. Applicant's Draft->Registered move has no
 # cross-doctype gate (just the field-floor/medical check already in Applicant.validate()).
 # Registered->CV Generated is gated on cv_generation_gate (Standard track + Musaned, Step 2).
-# Placement's Ticketed->Departed is gated on medical_2_gate (Step 6, below). Selected->
-# Processing and Stamped->Ticketed have no gate yet (nothing to check against). Processing->
-# Stamped's real gate — "all mandatory corridor steps issued" — depends on Clearance Step,
-# which doesn't exist until Step 7; left ungated until then.
+# Placement's Ticketed->Departed is gated on medical_2_gate (Step 6). Processing->Stamped is
+# gated on all_mandatory_clearance_steps_complete (Step 7, below). Selected->Processing and
+# Stamped->Ticketed have no gate — nothing to check against for either.
 STAGE_GATES = {}
+
+# (doctype, to_status) -> callable(doc). Runs once, after a transition has already committed
+# (doc.save() + Process Event logged) — orchestration, not validation; a side effect here
+# can't block the move itself (that's what STAGE_GATES is for). Keeps transition() the single
+# place that drives cross-doctype consequences (Part C: "triggers reopen_for_reprocessing()...
+# triggers commission accrual on reaching Departed") instead of scattering them across callers.
+TRANSITION_SIDE_EFFECTS = {}
 
 
 def transition(doc, new_status, actor=None, override=False, override_reason=None):
@@ -100,6 +106,10 @@ def transition(doc, new_status, actor=None, override=False, override_reason=None
 		}
 	).insert(ignore_permissions=True)
 
+	side_effect = TRANSITION_SIDE_EFFECTS.get((doc.doctype, new_status))
+	if side_effect:
+		side_effect(doc)
+
 	return doc
 
 
@@ -145,3 +155,19 @@ def medical_2_gate(placement) -> bool:
 
 
 STAGE_GATES[("Ticketed", "Departed")] = medical_2_gate
+
+
+# --- All-mandatory-clearance-steps-complete gate (Part A.2 Stage 6 / Step 7) ---
+# "Stamped — all mandatory corridor steps issued." Optional steps (is_mandatory=0) don't block.
+
+
+def all_mandatory_clearance_steps_complete(placement) -> bool:
+	steps = frappe.get_all(
+		"Clearance Step",
+		filters={"placement": placement.name, "is_mandatory": 1},
+		fields=["status"],
+	)
+	return bool(steps) and all(s.status == "Complete" for s in steps)
+
+
+STAGE_GATES[("Processing", "Stamped")] = all_mandatory_clearance_steps_complete
