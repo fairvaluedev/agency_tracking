@@ -192,10 +192,10 @@ def record_ticket_details(placement_name, ticket_number, flight_date, ticket_cos
 	placement.save(ignore_permissions=True)
 
 	if ticket_cost:
-		from agency_tracking.finance_api import _log_transaction
+		from agency_tracking.finance_api import _log_stage_transaction
 
-		_log_transaction(
-			"Expense", ticket_cost, currency or "ETB", f"Ticket cost for {placement_name}", placement_name
+		_log_stage_transaction(
+			"Expense", ticket_cost, currency or "ETB", f"Ticket cost for {placement_name}", placement_name, None
 		)
 	return placement.as_dict()
 
@@ -217,13 +217,14 @@ def record_reschedule(placement_name, reschedule_date, reschedule_cause, resched
 	placement.save(ignore_permissions=True)
 
 	if reschedule_cause == "Internal" and reschedule_cost:
-		from agency_tracking.finance_api import _log_transaction
+		from agency_tracking.finance_api import _log_stage_transaction
 
-		_log_transaction(
+		_log_stage_transaction(
 			"Expense",
 			reschedule_cost,
 			currency or "ETB",
 			f"Internal reschedule cost for {placement_name}",
 			placement_name,
+			None,
 		)
 	return placement.as_dict()

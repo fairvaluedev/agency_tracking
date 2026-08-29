@@ -50,7 +50,6 @@ class TestFinanceAPI(FrappeTestCase):
 		self.assertEqual(result["amount_birr"], 50 * 55.0)
 
 	def test_general_expense_without_placement_is_loggable(self):
-		record_fx_rate("ETB", 1.0, frappe.utils.today())
 		manager = make_role_user("fa02", "Manager")
 		frappe.set_user(manager.name)
 		result = log_stage_expense(75, "ETB", "Office rent share")
@@ -58,7 +57,6 @@ class TestFinanceAPI(FrappeTestCase):
 		self.assertFalse(result["placement"])
 
 	def test_non_internal_role_cannot_log(self):
-		record_fx_rate("ETB", 1.0, frappe.utils.today())
 		agency_user = make_role_user("fa02b", "Foreign Agency")
 		frappe.set_user(agency_user.name)
 		with self.assertRaises(frappe.PermissionError):
@@ -66,7 +64,6 @@ class TestFinanceAPI(FrappeTestCase):
 
 	def test_manager_can_always_log_income(self):
 		placement = saudi_selected_placement("fa03")
-		record_fx_rate("ETB", 1.0, frappe.utils.today())
 		manager = make_role_user("fa03", "Manager")
 
 		frappe.set_user(manager.name)
@@ -77,7 +74,6 @@ class TestFinanceAPI(FrappeTestCase):
 		# 2026-08-29: no longer a hard "1=0" for everyone but Finance Manager/Admin -- staff
 		# can see their own logged rows, just not everyone else's.
 		placement = saudi_selected_placement("fa04")
-		record_fx_rate("ETB", 1.0, frappe.utils.today())
 		manager = make_role_user("fa04", "Manager")
 		frappe.set_user(manager.name)
 		log_stage_income(100, "ETB", "test", placement=placement.name)
@@ -93,7 +89,6 @@ class TestFinanceAPI(FrappeTestCase):
 
 	def test_finance_manager_can_list_transactions(self):
 		placement = saudi_selected_placement("fa05")
-		record_fx_rate("ETB", 1.0, frappe.utils.today())
 		frappe.set_user("Administrator")
 		log_stage_income(100, "ETB", "test", placement=placement.name)
 
@@ -104,7 +99,6 @@ class TestFinanceAPI(FrappeTestCase):
 
 	def test_approve_transaction_requires_finance_role(self):
 		placement = saudi_selected_placement("fa06")
-		record_fx_rate("ETB", 1.0, frappe.utils.today())
 		result = log_stage_income(100, "ETB", "test", placement=placement.name)
 
 		officer = make_role_user("fa06", "Clearance Officer")
@@ -114,7 +108,6 @@ class TestFinanceAPI(FrappeTestCase):
 
 	def test_approve_transaction_succeeds(self):
 		placement = saudi_selected_placement("fa06b")
-		record_fx_rate("ETB", 1.0, frappe.utils.today())
 		result = log_stage_income(100, "ETB", "test", placement=placement.name)
 
 		approved = approve_transaction(result["name"])
@@ -123,7 +116,6 @@ class TestFinanceAPI(FrappeTestCase):
 
 	def test_reject_transaction_requires_reason(self):
 		placement = saudi_selected_placement("fa06c")
-		record_fx_rate("ETB", 1.0, frappe.utils.today())
 		result = log_stage_income(100, "ETB", "test", placement=placement.name)
 
 		with self.assertRaises(frappe.ValidationError):
@@ -131,7 +123,6 @@ class TestFinanceAPI(FrappeTestCase):
 
 	def test_reject_transaction_succeeds(self):
 		placement = saudi_selected_placement("fa06d")
-		record_fx_rate("ETB", 1.0, frappe.utils.today())
 		result = log_stage_income(100, "ETB", "test", placement=placement.name)
 
 		rejected = reject_transaction(result["name"], "Duplicate entry")
@@ -140,7 +131,6 @@ class TestFinanceAPI(FrappeTestCase):
 
 	def test_void_transaction_requires_reason(self):
 		placement = saudi_selected_placement("fa07")
-		record_fx_rate("ETB", 1.0, frappe.utils.today())
 		result = log_stage_income(100, "ETB", "test", placement=placement.name)
 		approve_transaction(result["name"])
 
@@ -149,7 +139,6 @@ class TestFinanceAPI(FrappeTestCase):
 
 	def test_void_transaction_requires_finance_role(self):
 		placement = saudi_selected_placement("fa08")
-		record_fx_rate("ETB", 1.0, frappe.utils.today())
 		result = log_stage_income(100, "ETB", "test", placement=placement.name)
 		approve_transaction(result["name"])
 
@@ -160,14 +149,12 @@ class TestFinanceAPI(FrappeTestCase):
 
 	def test_void_transaction_only_from_approved(self):
 		placement = saudi_selected_placement("fa08b")
-		record_fx_rate("ETB", 1.0, frappe.utils.today())
 		result = log_stage_income(100, "ETB", "test", placement=placement.name)
 		with self.assertRaises(frappe.ValidationError):
 			void_transaction(result["name"], "Entered in error")
 
 	def test_void_transaction_succeeds_and_stays_visible(self):
 		placement = saudi_selected_placement("fa09")
-		record_fx_rate("ETB", 1.0, frappe.utils.today())
 		result = log_stage_income(100, "ETB", "test", placement=placement.name)
 		approve_transaction(result["name"])
 

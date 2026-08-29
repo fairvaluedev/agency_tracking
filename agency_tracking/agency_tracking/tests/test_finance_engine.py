@@ -90,7 +90,7 @@ class TestFinanceEngine(FrappeTestCase):
 		from agency_tracking.agency_tracking.doctype.placement.test_placement import registered_applicant
 
 		applicant = registered_applicant(
-			"fe03", entry_track="Standard", destination_country="Saudi Arabia", musaned_status="ALTEYAZECHEM"
+			"fe03", entry_track="Standard", destination_country="Saudi Arabia"
 		)
 		from agency_tracking.cv_api import generate_cv
 		from agency_tracking.portal_api import select_candidate
@@ -220,7 +220,7 @@ class TestFinanceEngine(FrappeTestCase):
 
 		def new_departed_placement_for_contractor(sub_tag):
 			applicant = registered_applicant(
-				sub_tag, entry_track="Muayena", destination_country="Saudi Arabia", musaned_status="Not Applicable"
+				sub_tag, entry_track="Muayena", destination_country="Saudi Arabia"
 			)
 			placement = frappe.get_doc(
 				{

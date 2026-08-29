@@ -74,6 +74,42 @@ frappe.ui.form.on('Applicant', {
 				frappe.set_route('Form', 'Placement', frm.doc.active_placement);
 			}, __('Actions'));
 		}
+
+		// --- 3. Registration Fee ---
+		if (frm.doc.fee_required && frm.doc.registration_fee_amount && !frm.doc.fee_transaction) {
+			frm.add_custom_button(__('Log Fee'), () => {
+				frm.trigger('log_applicant_fee');
+			}, __('Actions')).addClass('btn-primary');
+		}
+
+		if (frm.doc.fee_transaction) {
+			frm.add_custom_button(__('View Fee Ledger Entry'), () => {
+				frappe.set_route('Form', 'Applicant Transaction', frm.doc.fee_transaction);
+			}, __('Actions'));
+		}
+	},
+
+	log_applicant_fee(frm) {
+		frappe.confirm(
+			__('Log this registration fee ({0} {1}) into the Finance ledger as Paid?', [
+				frm.doc.registration_fee_amount,
+				frm.doc.fee_currency || 'ETB',
+			]),
+			() => {
+				frappe.call({
+					method: 'agency_tracking.applicant_api.log_applicant_fee',
+					args: { applicant_name: frm.doc.name },
+					freeze: true,
+					freeze_message: __('Logging fee...'),
+					callback(r) {
+						if (!r.exc) {
+							frappe.show_alert({ message: __('Fee logged to the Finance ledger.'), indicator: 'green' });
+							frm.reload_doc();
+						}
+					},
+				});
+			}
+		);
 	},
 
 	autofill_passport_mrz(frm) {
@@ -136,7 +172,7 @@ frappe.ui.form.on('Applicant', {
 
 	register_applicant(frm) {
 		frappe.confirm(
-			__('Are you sure you want to Register this applicant? (Ensure medical status is FIT)'),
+			__('Are you sure you want to Register this applicant?'),
 			() => {
 				frappe.call({
 					method: 'agency_tracking.applicant_api.register_applicant',

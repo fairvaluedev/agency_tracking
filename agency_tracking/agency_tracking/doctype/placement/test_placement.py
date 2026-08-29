@@ -7,9 +7,7 @@ from frappe.tests.utils import FrappeTestCase
 from agency_tracking.state_machine import transition
 
 
-def registered_applicant(tag, entry_track="Standard", destination_country="Kuwait", musaned_status=None):
-	if musaned_status is None:
-		musaned_status = "ALTEYAZECHEM" if destination_country == "Saudi Arabia" else "Not Applicable"
+def registered_applicant(tag, entry_track="Standard", destination_country="Kuwait"):
 	if entry_track == "Standard":
 		data = {
 			"doctype": "Applicant",
@@ -35,7 +33,6 @@ def registered_applicant(tag, entry_track="Standard", destination_country="Kuwai
 			"date_of_birth": "1998-01-01",
 			"education": "High School",
 			"target_job": "Housemaid",
-			"musaned_status": musaned_status,
 			"photograph": "/files/test_photo.jpg",
 			"passport_scan": "/files/test_passport.pdf",
 			"medical_status": "FIT",

@@ -8,7 +8,7 @@ from agency_tracking.cv_api import generate_cv
 from agency_tracking.state_machine import transition
 
 
-def registered_standard_applicant(tag, destination_country="Kuwait", musaned_status="Not Applicable"):
+def registered_standard_applicant(tag, destination_country="Kuwait"):
 	doc = frappe.get_doc(
 		{
 			"doctype": "Applicant",
@@ -37,7 +37,6 @@ def registered_standard_applicant(tag, destination_country="Kuwait", musaned_sta
 			"photograph": "/files/test_photo.jpg",
 			"passport_scan": "/files/test_passport.pdf",
 			"medical_status": "FIT",
-			"musaned_status": musaned_status,
 		}
 	).insert(ignore_permissions=True)
 	transition(doc, "Registered")
@@ -71,26 +70,14 @@ def registered_muayena_applicant(tag):
 
 
 class TestCVRecord(FrappeTestCase):
-	def test_kuwait_standard_generates_cv_without_musaned(self):
+	def test_kuwait_standard_generates_cv(self):
 		applicant = registered_standard_applicant("t01", destination_country="Kuwait")
 		result = generate_cv(applicant.name)
 		self.assertEqual(result["applicant_status"], "CV Generated")
 		self.assertEqual(frappe.db.get_value("CV Record", result["cv_record"], "docstatus"), 1)
 
-	def test_saudi_standard_generates_cv_regardless_of_musaned_status(self):
-		# 2026-08-29: the Musaned gate was removed -- CV generation for Saudi-bound Standard
-		# candidates no longer depends on musaned_status at all. The field itself is still
-		# tracked as data, just no longer a blocking gate.
-		applicant = registered_standard_applicant(
-			"t02", destination_country="Saudi Arabia", musaned_status="TEYZALECH"
-		)
-		result = generate_cv(applicant.name)
-		self.assertEqual(result["applicant_status"], "CV Generated")
-
-	def test_saudi_standard_generates_cv_with_alteyazechem(self):
-		applicant = registered_standard_applicant(
-			"t04", destination_country="Saudi Arabia", musaned_status="ALTEYAZECHEM"
-		)
+	def test_saudi_standard_generates_cv(self):
+		applicant = registered_standard_applicant("t02", destination_country="Saudi Arabia")
 		result = generate_cv(applicant.name)
 		self.assertEqual(result["applicant_status"], "CV Generated")
 

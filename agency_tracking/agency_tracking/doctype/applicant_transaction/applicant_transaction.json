@@ -6,6 +6,7 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "applicant",
   "placement",
   "cycle_number",
   "transaction_type",
@@ -30,6 +31,16 @@
   "rejection_reason"
  ],
  "fields": [
+  {
+   "description": "Optional — set for registration-fee entries logged before any Placement exists (Applicant.log_fee_transaction). Most transactions are traceable via placement instead.",
+   "fieldname": "applicant",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Applicant",
+   "options": "Applicant",
+   "read_only": 1
+  },
   {
    "description": "Part B: optional — not every transaction is placement-scoped (e.g. general agency overhead logged directly by staff).",
    "fieldname": "placement",

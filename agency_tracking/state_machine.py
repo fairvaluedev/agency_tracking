@@ -163,9 +163,8 @@ def cv_generation_gate(applicant) -> bool:
 	"""Registered -> CV Generated (Part A.2 Stage 3): Standard track only.
 
 	2026-08-29: the Musaned gate (blocking CV generation for Saudi-bound Standard candidates
-	until musaned_status == ALTEYAZECHEM) has been removed per direct instruction. The
-	musaned_status field itself is untouched -- still tracked as data -- it just no longer
-	blocks anything.
+	until musaned_status == ALTEYAZECHEM) and the musaned_status field itself have both been
+	removed per direct instruction -- Musaned tracking is no longer part of this system at all.
 	"""
 	return applicant.entry_track == "Standard"
 

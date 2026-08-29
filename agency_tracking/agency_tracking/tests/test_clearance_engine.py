@@ -19,7 +19,7 @@ from agency_tracking.state_machine import transition
 
 def saudi_selected_placement(tag):
 	applicant = registered_applicant(
-		tag, entry_track="Muayena", destination_country="Saudi Arabia", musaned_status="Not Applicable"
+		tag, entry_track="Muayena", destination_country="Saudi Arabia"
 	)
 	contractor = make_contractor(tag, country="Saudi Arabia")
 	placement = frappe.get_doc(

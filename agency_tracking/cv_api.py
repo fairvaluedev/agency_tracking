@@ -50,10 +50,10 @@ def generate_cv(applicant_name):
 	"""Part A.2 Stage 3 / Part I Step 2: create + submit a CV Record for a Standard-track
 	Applicant, then move the Applicant to CV Generated. CV Record.validate() enforces the
 	Standard-only/Registered-status rules first (clearer, CV-specific error messages);
-	transition()'s own gate re-checks the same invariant as a backstop. The Musaned gate was
-	removed 2026-08-29 -- musaned_status is still tracked as data, it just no longer blocks
-	CV generation. Also renders and attaches the actual CV PDF (2026-08-29) -- previously
-	this just created a bare record with no document output at all.
+	transition()'s own gate re-checks the same invariant as a backstop. The Musaned gate and
+	the musaned_status field were both removed 2026-08-29 -- Musaned tracking is gone from
+	this system entirely. Also renders and attaches the actual CV PDF (2026-08-29) --
+	previously this just created a bare record with no document output at all.
 	"""
 	applicant = frappe.get_doc("Applicant", applicant_name)
 	if not applicant.has_permission("write"):

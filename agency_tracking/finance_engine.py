@@ -20,7 +20,14 @@ def get_fx_rate(currency, as_of_date=None):
 	"""Cached rate for `currency` on `as_of_date` (default today). Falls back to the most
 	recent cached rate on or before that date — the "historical lookup for backdated entries"
 	Part H describes. Throws if nothing's ever been recorded for this currency; there's no safe
-	made-up default for money."""
+	made-up default for money.
+
+	ETB is Birr itself (2026-08-29 correction) -- there's no "conversion" to compute, so it's
+	hardcoded to 1.0 rather than requiring a Finance Manager to record a meaningless FX Rate
+	row for it."""
+	if currency == "ETB":
+		return 1.0, as_of_date or today()
+
 	as_of_date = as_of_date or today()
 	exact = frappe.db.get_value(
 		"FX Rate", {"currency": currency, "rate_date": as_of_date}, "rate_to_birr"
@@ -45,6 +52,8 @@ def get_fx_rate(currency, as_of_date=None):
 
 
 def record_fx_rate(currency, rate_to_birr, rate_date=None):
+	if currency == "ETB":
+		frappe.throw("ETB is Birr itself -- it always converts 1:1, no FX rate to record.", frappe.ValidationError)
 	rate_date = rate_date or today()
 	existing = frappe.db.get_value("FX Rate", {"currency": currency, "rate_date": rate_date}, "name")
 	if existing:

@@ -103,6 +103,58 @@ def update_applicant(applicant_name, override_ban=False, override_reason=None, *
 
 
 @frappe.whitelist()
+def log_applicant_fee(applicant_name):
+	"""Manual 'Log Fee' button path. Just flips fee_status to Paid and saves -- the actual
+	ledger-entry creation lives in Applicant.maybe_log_fee_transaction (before_save), so a
+	direct Desk edit that sets fee_status=Paid gets identical behavior without going through
+	this endpoint at all. Kept as its own whitelisted call (rather than folding into
+	update_applicant) so the button can carry its own explicit permission + friendly
+	already-logged error, matching the other single-purpose action endpoints in this module."""
+	from agency_tracking.roles import INTERNAL_STAFF_ROLES
+
+	if not (INTERNAL_STAFF_ROLES & set(frappe.get_roles())):
+		frappe.throw("Not permitted.", frappe.PermissionError)
+
+	doc = frappe.get_doc("Applicant", applicant_name)
+	if not doc.fee_required or not doc.registration_fee_amount:
+		frappe.throw("Set Fee Required and an amount before logging a fee.", frappe.ValidationError)
+	if doc.fee_transaction:
+		frappe.throw(f"This fee was already logged as {doc.fee_transaction}.", frappe.ValidationError)
+
+	doc.fee_status = "Paid"
+	doc.save(ignore_permissions=True)
+	return doc.as_dict()
+
+
+LMIS_EDITABLE_FIELDS = (
+	"exam_date",
+	"coc_status",
+	"labor_id",
+	"national_id",
+	"emergency_contact_name",
+	"emergency_contact_phone",
+	"emergency_contact_address",
+)
+
+
+@frappe.whitelist()
+def update_applicant_for_lmis(applicant_name, **data):
+	"""Narrow LMIS-stage edit surface (2026-08-29 correction, Part 5): national_id, labor_id,
+	and emergency_contact_* are deliberately NOT part of the Registered field floor -- they're
+	captured here, once the candidate is actually at the LMIS clearance step, not guessed at
+	registration time. Restricted to the two LMIS roles (plus Manager/Admin, same fallback
+	pattern as everywhere else) rather than general update_applicant."""
+	if not ({"Saudi LMIS", "Kuwait LMIS", "Manager", "Admin"} & set(frappe.get_roles())):
+		frappe.throw("Not permitted.", frappe.PermissionError)
+
+	doc = frappe.get_doc("Applicant", applicant_name)
+	updates = {k: v for k, v in data.items() if k in LMIS_EDITABLE_FIELDS}
+	doc.update(updates)
+	doc.save(ignore_permissions=True)
+	return doc.as_dict()
+
+
+@frappe.whitelist()
 def cancel_applicant(applicant_name, reason):
 	"""Global 'Cancelled' escape hatch (2026-08-29 lifecycle spec): only from Registered/CV
 	Generated (never Draft -- nothing committed yet to cancel). If there's an active Placement,

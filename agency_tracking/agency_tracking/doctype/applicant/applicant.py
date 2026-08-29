@@ -9,16 +9,16 @@ from frappe.model.document import Document
 DRAFT_REQUIRED_FIELDS = ["full_name", "gender", "nationality", "entry_track"]
 
 # Part A.2 / SRS Stage 2 (Standard track): full field floor before a candidate is "official".
+# national_id, labor_id, emergency_contact_name/phone are deliberately NOT required here
+# (2026-08-29 correction) -- those are LMIS-stage data, captured later via
+# applicant_api.update_applicant_for_lmis once the candidate reaches the LMIS clearance step,
+# not known/collected at Registration time.
 STANDARD_REGISTERED_REQUIRED_FIELDS = DRAFT_REQUIRED_FIELDS + [
-	"national_id",
-	"labor_id",
 	"destination_country",
 	"salary_amount",
 	"salary_currency",
 	"religion",
 	"marital_status",
-	"emergency_contact_name",
-	"emergency_contact_phone",
 	"passport_number",
 	"passport_issue_date",
 	"passport_expiry_date",
@@ -31,13 +31,13 @@ STANDARD_REGISTERED_REQUIRED_FIELDS = DRAFT_REQUIRED_FIELDS + [
 ]
 
 # Part A.1: Muayena registers with a lighter, global-only field floor
-# (passport, national ID, medical, photos — CV-specific fields optional/unused).
+# (passport, medical, photos — CV-specific fields optional/unused; national_id is LMIS-stage,
+# same reasoning as Standard above).
 # destination_country IS required here (2026-08-29 correction) -- it's selected during
 # Draft/Registered same as Standard, not deferred until a contract is uploaded. The earlier
 # assumption that it becomes known only at Placement creation was wrong; see
 # placement_api.create_muayena_placement, which no longer needs to set it as a side effect.
 MUAYENA_REGISTERED_REQUIRED_FIELDS = DRAFT_REQUIRED_FIELDS + [
-	"national_id",
 	"destination_country",
 	"passport_number",
 	"passport_issue_date",
@@ -69,12 +69,16 @@ class Applicant(Document):
 		# help this same save. Found 2026-08-29 via a real "uploading a passport on a
 		# near-empty Draft throws a field-floor error" report.
 		self.autofill_from_passport()
+		self.calc_passport_issue_date()
+		self.calc_age()
 
 	def validate(self):
 		self.set_full_name()
 		self.validate_field_floor()
-		self.validate_medical_for_registration()
 		self.validate_uniqueness()
+
+	def before_save(self):
+		self.maybe_log_fee_transaction()
 
 	def autofill_from_passport(self):
 		"""Auto-parse the passport scan's MRZ on upload and fill in currently-blank fields
@@ -108,6 +112,27 @@ class Applicant(Document):
 			if not self.get(fieldname):
 				self.set(fieldname, value)
 
+	def calc_passport_issue_date(self):
+		"""Passport Issue Date is fully derived, never manually entered (2026-08-29 correction,
+		read_only in applicant.json) -- Ethiopian passports have a fixed 5-year validity, so
+		issue date = expiry date - 5 years. Reuses the same pure function passport_parser.py's
+		MRZ path already uses, so OCR and direct entry agree."""
+		if not self.passport_expiry_date:
+			return
+		from agency_tracking.passport_parser import infer_passport_issue_date
+
+		self.passport_issue_date = infer_passport_issue_date(self.passport_expiry_date)
+
+	def calc_age(self):
+		"""Age is fully derived from Date of Birth (2026-08-29, read_only in applicant.json) --
+		never manually entered."""
+		if not self.date_of_birth:
+			self.age = None
+			return
+		dob = frappe.utils.getdate(self.date_of_birth)
+		today = frappe.utils.getdate()
+		self.age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
 	def set_full_name(self):
 		"""Some clients (the split-name intake form) never set full_name directly --
 		derive it from first/middle/last whenever full_name itself is blank. Clients that
@@ -134,13 +159,6 @@ class Applicant(Document):
 				frappe.ValidationError,
 			)
 
-	def validate_medical_for_registration(self):
-		if self.status in ("Registered", "CV Generated") and self.medical_status != "FIT":
-			frappe.throw(
-				"Medical status must be FIT before an applicant can be Registered.",
-				frappe.ValidationError,
-			)
-
 	def validate_uniqueness(self):
 		for fieldname in UNIQUE_FIELDS:
 			value = self.get(fieldname)
@@ -158,3 +176,44 @@ class Applicant(Document):
 					),
 					frappe.DuplicateEntryError,
 				)
+
+	def maybe_log_fee_transaction(self):
+		"""Fires the moment fee_status flips to Paid (button-driven or a direct Desk edit) --
+		one single path for both, since log_applicant_fee (applicant_api.py) just sets
+		fee_status='Paid' and saves, letting this hook do the actual logging. Idempotent via
+		fee_transaction (never re-logs once set) and has_value_changed (never fires on an
+		unrelated save of an already-Paid row)."""
+		if not (
+			self.fee_required
+			and self.registration_fee_amount
+			and self.fee_status == "Paid"
+			and not self.fee_transaction
+			and self.has_value_changed("fee_status")
+		):
+			return
+
+		from agency_tracking.finance_engine import get_fx_rate
+
+		fx_rate, fx_rate_date = get_fx_rate(self.fee_currency or "ETB")
+		txn = frappe.get_doc(
+			{
+				"doctype": "Applicant Transaction",
+				"applicant": self.name,
+				"placement": self.active_placement or None,
+				"transaction_type": self.fee_direction or "Income",
+				"amount_original": self.registration_fee_amount,
+				"currency_original": self.fee_currency or "ETB",
+				"fx_rate": fx_rate,
+				"fx_rate_date": fx_rate_date,
+				"amount_birr": round(float(self.registration_fee_amount) * fx_rate, 2),
+				"description": (self.fee_type or "Registration Fee")
+				+ f" for {self.name}"
+				+ (f" -- {self.fee_notes}" if self.fee_notes else ""),
+				"stage_logged_at": self.status,
+				"logged_by": frappe.session.user,
+			}
+		).insert(ignore_permissions=True)
+
+		self.fee_transaction = txn.name
+		if not self.fee_payment_date:
+			self.fee_payment_date = frappe.utils.today()

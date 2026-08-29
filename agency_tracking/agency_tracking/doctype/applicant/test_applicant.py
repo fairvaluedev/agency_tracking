@@ -89,17 +89,20 @@ class TestApplicant(FrappeTestCase):
 
 	def test_standard_registration_blocked_missing_one_field(self):
 		floor = standard_floor("t03")
-		floor.pop("labor_id")
+		floor.pop("target_job")
 		doc = self.make_draft(**floor)
 		with self.assertRaises(frappe.ValidationError):
 			transition(doc, "Registered")
 
-	def test_registration_blocked_when_medical_not_fit(self):
+	def test_registration_not_blocked_by_medical_status(self):
+		# 2026-08-29 correction: Applicant.medical_status is informational only -- the real
+		# fitness gate is post-contract, on Placement.medical_selected_status (Selected ->
+		# Processing), not here.
 		floor = standard_floor("t04")
 		floor["medical_status"] = "Pending"
 		doc = self.make_draft(**floor)
-		with self.assertRaises(frappe.ValidationError):
-			transition(doc, "Registered")
+		transition(doc, "Registered")
+		self.assertEqual(doc.status, "Registered")
 
 	def test_muayena_registers_with_lighter_field_floor(self):
 		doc = self.make_draft(entry_track="Muayena", **muayena_floor("t05"))
