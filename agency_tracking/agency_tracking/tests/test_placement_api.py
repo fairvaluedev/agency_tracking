@@ -23,7 +23,7 @@ class TestPlacementAPI(FrappeTestCase):
 		applicant = registered_applicant("mpa01", entry_track="Muayena", destination_country="Kuwait")
 		contractor = make_contractor("mpa01", country="Kuwait")
 
-		result = create_muayena_placement(applicant.name, contractor.name, "Kuwait")
+		result = create_muayena_placement(applicant.name, contractor.name)
 		self.assertEqual(result["status"], "Selected")
 		self.assertFalse(result["cv_record"])
 
@@ -37,7 +37,7 @@ class TestPlacementAPI(FrappeTestCase):
 		applicant = registered_applicant("mpa02", entry_track="Standard", destination_country="Kuwait")
 		contractor = make_contractor("mpa02", country="Kuwait")
 		with self.assertRaises(frappe.ValidationError):
-			create_muayena_placement(applicant.name, contractor.name, "Kuwait")
+			create_muayena_placement(applicant.name, contractor.name)
 
 	def test_create_muayena_placement_rejects_draft_applicant(self):
 		applicant = frappe.get_doc(
@@ -53,14 +53,14 @@ class TestPlacementAPI(FrappeTestCase):
 		).insert(ignore_permissions=True)
 		contractor = make_contractor("mpa03", country="Kuwait")
 		with self.assertRaises(frappe.ValidationError):
-			create_muayena_placement(applicant.name, contractor.name, "Kuwait")
+			create_muayena_placement(applicant.name, contractor.name)
 
 	def test_create_muayena_placement_blocks_double_creation(self):
 		applicant = registered_applicant("mpa04", entry_track="Muayena", destination_country="Kuwait")
 		contractor = make_contractor("mpa04", country="Kuwait")
-		create_muayena_placement(applicant.name, contractor.name, "Kuwait")
+		create_muayena_placement(applicant.name, contractor.name)
 		with self.assertRaises(frappe.ValidationError):
-			create_muayena_placement(applicant.name, contractor.name, "Kuwait")
+			create_muayena_placement(applicant.name, contractor.name)
 
 	def test_upload_contract_by_owning_contractor_extracts_date(self):
 		applicant = cv_generated_applicant("mpa05", destination_country="Kuwait")
@@ -101,7 +101,8 @@ class TestPlacementAPI(FrappeTestCase):
 	def test_advance_placement_normal_move(self):
 		applicant = registered_applicant("mpa08", entry_track="Muayena", destination_country="Kuwait")
 		contractor = make_contractor("mpa08", country="Kuwait")
-		placement = create_muayena_placement(applicant.name, contractor.name, "Kuwait")
+		placement = create_muayena_placement(applicant.name, contractor.name)
+		frappe.db.set_value("Placement", placement["name"], "medical_selected_status", "FIT")
 
 		result = advance_placement(placement["name"], "Processing")
 		self.assertEqual(result["status"], "Processing")
@@ -112,7 +113,7 @@ class TestPlacementAPI(FrappeTestCase):
 		# contractor who owns this exact placement.
 		applicant = registered_applicant("mpa09", entry_track="Muayena", destination_country="Kuwait")
 		owner = make_contractor("mpa09", country="Kuwait")
-		placement = create_muayena_placement(applicant.name, owner.name, "Kuwait")
+		placement = create_muayena_placement(applicant.name, owner.name)
 
 		frappe.set_user(owner.user)
 		with self.assertRaises(frappe.PermissionError):

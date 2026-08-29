@@ -61,7 +61,7 @@ class TestProcessEvent(FrappeTestCase):
 				"email": "pe-owner@example.com",
 				"first_name": "PE Owner",
 				"send_welcome_email": 0,
-				"roles": [{"role": "Recruitment/Intake"}],
+				"roles": [{"role": "Registrar"}],
 			}
 		).insert(ignore_permissions=True)
 		other = frappe.get_doc(
@@ -70,7 +70,7 @@ class TestProcessEvent(FrappeTestCase):
 				"email": "pe-other@example.com",
 				"first_name": "PE Other",
 				"send_welcome_email": 0,
-				"roles": [{"role": "Recruitment/Intake"}],
+				"roles": [{"role": "Registrar"}],
 			}
 		).insert(ignore_permissions=True)
 
@@ -118,7 +118,7 @@ class TestProcessEvent(FrappeTestCase):
 				"email": "pe-else@example.com",
 				"first_name": "PE Else",
 				"send_welcome_email": 0,
-				"roles": [{"role": "Recruitment/Intake"}],
+				"roles": [{"role": "Registrar"}],
 			}
 		).insert(ignore_permissions=True)
 

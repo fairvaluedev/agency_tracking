@@ -104,3 +104,43 @@ def match_statement_lines(statement):
 
 	statement.save(ignore_permissions=True)
 	return statement
+
+
+# --- Commission batch paid-applicant-list parsing (2026-08-29) ---
+# A distinct feature from the bank-statement reconciliation above: the agency sends a CSV or
+# PDF listing which specific applicants they've paid for (not a bank statement line matching a
+# batch's total), enabling partial (per-item) settlement -- see finance_engine.
+# match_batch_payment_proof.
+
+
+def _parse_paid_names_csv(file_path):
+	"""A single-column (or first-column) CSV of applicant full names, one per row."""
+	names = []
+	with open(file_path, newline="", encoding="utf-8") as f:
+		reader = csv.reader(f)
+		for row in reader:
+			if row and row[0].strip():
+				names.append(row[0].strip())
+	return names
+
+
+def _parse_paid_names_pdf(file_path):
+	"""Best-effort: one applicant name per non-empty line of extracted text. No structured
+	format to rely on, unlike the bank-statement CSV -- genuinely best-effort, same philosophy
+	as contract_parser.py's extraction."""
+	from agency_tracking.contract_parser import extract_text_from_pdf
+
+	text = extract_text_from_pdf(file_path)
+	return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def parse_paid_applicant_names(file_url):
+	"""Returns a list of applicant full names from an uploaded CSV or PDF, by extension.
+	Missing/unreadable files yield an empty list rather than raising -- unmatched/empty just
+	means every item stays Pending for manual review."""
+	file_path = _resolve_frappe_file_path(file_url)
+	if not file_path:
+		return []
+	if file_path.lower().endswith(".csv"):
+		return _parse_paid_names_csv(file_path)
+	return _parse_paid_names_pdf(file_path)

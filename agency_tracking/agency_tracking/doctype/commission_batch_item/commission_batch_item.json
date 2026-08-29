@@ -6,7 +6,8 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
-  "transaction"
+  "transaction",
+  "status"
  ],
  "fields": [
   {
@@ -16,6 +17,15 @@
    "label": "Applicant Transaction",
    "options": "Applicant Transaction",
    "reqd": 1
+  },
+  {
+   "default": "Pending",
+   "description": "2026-08-29: per-item settlement, so a batch can be partially paid (some applicants paid, some still owed) rather than all-or-nothing.",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Pending\nPaid"
   }
  ],
  "index_web_pages_for_search": 1,

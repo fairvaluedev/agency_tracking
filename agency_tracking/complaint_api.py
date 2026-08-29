@@ -6,17 +6,8 @@
 import frappe
 from frappe.utils import today
 
+from agency_tracking.roles import INTERNAL_STAFF_ROLES
 from agency_tracking.state_machine import transition
-
-INTERNAL_STAFF_ROLES = {
-	"Recruitment/Intake",
-	"Clearance Officer",
-	"Ticketing/Dispatch",
-	"Complaint Manager",
-	"Finance Manager",
-	"Manager",
-	"Admin",
-}
 
 TERMINAL_STATUSES = {"Resolved", "Returned - Free Replacement Required", "Escalated", "Dismissed"}
 

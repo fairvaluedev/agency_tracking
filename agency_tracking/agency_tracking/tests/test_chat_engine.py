@@ -25,7 +25,7 @@ def make_comm_manager(tag):
 	).insert(ignore_permissions=True)
 
 
-def make_staff(tag, role="Recruitment/Intake"):
+def make_staff(tag, role="Registrar"):
 	return frappe.get_doc(
 		{
 			"doctype": "User",
@@ -60,7 +60,7 @@ class TestChatEngine(FrappeTestCase):
 		validate_thread_participants(agency.user, "Administrator")  # should not raise
 
 	def test_internal_staff_to_staff_unrestricted(self):
-		staff_a = make_staff("ce05a", "Recruitment/Intake")
+		staff_a = make_staff("ce05a", "Registrar")
 		staff_b = make_staff("ce05b", "Clearance Officer")
 		validate_thread_participants(staff_a.name, staff_b.name)  # should not raise
 

@@ -75,12 +75,14 @@ def contract_age_watchdog():
 
 
 def wakala_reminder_watchdog():
-	"""business-workflow-srs.md: "Reminders (WhatsApp + portal notification) go out
-	automatically twice a week until it's paid" — the Wakala fee is the "Embassy/Wakala" step
-	in the Saudi corridor specifically (Part A.3)."""
+	"""2026-08-29 fix: the Wakala fee is paid by the *foreign agency* (Contractor), not internal
+	staff — this watchdog previously (wrongly) notified the LMIS officer instead. Also moved
+	from Mon/Thu to Fri/Sat/Sun (business ask: remind before the Monday document-submission
+	deadline, not after). Wakala now lives as fields on the "Embassy" step (was a standalone
+	"Embassy/Wakala" step_type) — see clearance_step.json's wakala_status field."""
 	unpaid_steps = frappe.get_all(
 		"Clearance Step",
-		filters={"step_type": "Embassy/Wakala", "payment_status": ["!=", "Paid"], "status": ["!=", "Complete"]},
+		filters={"step_type": "Embassy", "wakala_status": ["!=", "Paid"], "status": ["not in", ["Stamped", "Cancelled"]]},
 		fields=["name", "placement"],
 	)
 	for step in unpaid_steps:
@@ -88,9 +90,16 @@ def wakala_reminder_watchdog():
 
 
 def send_wakala_reminder(clearance_step_name, placement_name):
-	recipient = _recipient_for_placement(placement_name)
+	"""Recipient is the paying Contractor's linked User — never internal staff (that was the
+	bug). WhatsApp delivery needs a `phone` key in context (pulled from the Contractor's User's
+	mobile_no); previously nothing supplied one, so WhatsApp silently failed every time."""
+	contractor_name = frappe.db.get_value("Placement", placement_name, "contractor")
+	if not contractor_name:
+		return
+	recipient = frappe.db.get_value("Contractor", contractor_name, "user")
 	if not recipient:
 		return
+	phone = frappe.db.get_value("User", recipient, "mobile_no")
 	notify(
 		recipient,
 		"wakala_payment_reminder",
@@ -98,11 +107,51 @@ def send_wakala_reminder(clearance_step_name, placement_name):
 	)
 	# WhatsApp reminder too, per the spec's explicit "WhatsApp + portal notification" pairing —
 	# whatsapp delivery falls back gracefully (attempt_push_delivery never raises) if the
-	# contractor/applicant phone number isn't resolvable from context or WhatsApp isn't
-	# configured yet.
+	# contractor's phone isn't set or WhatsApp isn't configured yet.
 	notify(
 		recipient,
 		"wakala_payment_reminder",
-		{"clearance_step": clearance_step_name, "placement": placement_name},
+		{
+			"clearance_step": clearance_step_name,
+			"placement": placement_name,
+			"phone": phone,
+			"message": f"Wakala payment reminder for Clearance Step {clearance_step_name}.",
+		},
 		channel="WhatsApp",
 	)
+
+
+TAESHIR_INJAZ_REMINDER_TIERS_DAYS = [3, 2, 1]
+
+
+def taeshir_injaz_reminder_watchdog():
+	"""New (2026-08-29): reminds whoever holds the Saudi Taeshir role when a Taeshir
+	appointment is 3/2/1 days out and Injaz still hasn't been paid — arriving at the
+	appointment unpaid forfeits the (separate) appointment fee. Push only, deliberately no
+	WhatsApp (that channel is reserved for reaching the external foreign agency via Wakala;
+	Taeshir/Injaz reminders go to internal staff already using the system)."""
+	for tier_days in TAESHIR_INJAZ_REMINDER_TIERS_DAYS:
+		target_date = add_days(today(), tier_days)
+		due_steps = frappe.get_all(
+			"Clearance Step",
+			filters={
+				"step_type": "Taeshir",
+				"appointment_date": target_date,
+				"injaz_payment_status": ["!=", "Paid"],
+				"status": ["not in", ["Issued", "Complete", "Cancelled"]],
+			},
+			fields=["name", "placement"],
+		)
+		for step in due_steps:
+			for recipient in frappe.get_all(
+				"Has Role", filters={"role": "Saudi Taeshir"}, pluck="parent"
+			):
+				notify(
+					recipient,
+					"taeshir_injaz_payment_reminder",
+					{
+						"clearance_step": step.name,
+						"placement": step.placement,
+						"days_remaining": tier_days,
+					},
+				)

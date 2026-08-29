@@ -22,7 +22,7 @@ class TestComplaintAPI(FrappeTestCase):
 
 	def test_internal_staff_can_create_complaint(self):
 		placement = saudi_selected_placement("ca01")
-		staff = make_role_user("cmp01", "Recruitment/Intake")
+		staff = make_role_user("cmp01", "Registrar")
 		frappe.set_user(staff.name)
 		result = create_complaint(placement.name, "Worker unreachable", "Deployed")
 		self.assertEqual(result["status"], "New")
@@ -74,7 +74,7 @@ class TestComplaintAPI(FrappeTestCase):
 
 	def test_acknowledge_requires_complaint_manager_role(self):
 		placement = saudi_selected_placement("ca06")
-		staff = make_role_user("cmp06", "Recruitment/Intake")
+		staff = make_role_user("cmp06", "Registrar")
 		frappe.set_user(staff.name)
 		complaint = create_complaint(placement.name, "test", "Deployed")
 
@@ -87,7 +87,7 @@ class TestComplaintAPI(FrappeTestCase):
 		complaint = create_complaint(placement.name, "test", "Deployed")
 		acknowledge_complaint(complaint["name"])
 
-		staff = make_role_user("cmp07", "Recruitment/Intake")
+		staff = make_role_user("cmp07", "Registrar")
 		frappe.set_user(staff.name)
 		with self.assertRaises(frappe.PermissionError):
 			resolve_complaint(complaint["name"], "Resolved")

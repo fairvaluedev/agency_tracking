@@ -18,7 +18,7 @@ class TestCorridorEngine(FrappeTestCase):
 		create_corridors()
 		steps = get_corridor_steps("Saudi Arabia")
 		self.assertEqual(
-			[s["step_type"] for s in steps], ["LMIS Clearance", "Taeshir", "Injaz", "Embassy/Wakala"]
+			[s["step_type"] for s in steps], ["LMIS Clearance", "Taeshir", "Embassy"]
 		)
 
 	def test_kuwait_corridor_seeded_and_ordered(self):
@@ -26,7 +26,7 @@ class TestCorridorEngine(FrappeTestCase):
 		steps = get_corridor_steps("Kuwait")
 		self.assertEqual(
 			[s["step_type"] for s in steps],
-			["LMIS Police Clearance", "Telesign", "Kuwait Embassy", "LMIS Work Permit"],
+			["Kuwait LMIS", "Telesign", "Kuwait Embassy"],
 		)
 
 	def test_unconfigured_country_throws(self):
@@ -37,8 +37,8 @@ class TestCorridorEngine(FrappeTestCase):
 		create_corridors()
 		self.assertEqual(get_first_step_type("Saudi Arabia"), "LMIS Clearance")
 		self.assertEqual(get_next_step_type("Saudi Arabia", 1), "Taeshir")
-		self.assertEqual(get_next_step_type("Saudi Arabia", 4), None)
-		self.assertTrue(is_last_step("Saudi Arabia", 4))
+		self.assertEqual(get_next_step_type("Saudi Arabia", 3), None)
+		self.assertTrue(is_last_step("Saudi Arabia", 3))
 		self.assertFalse(is_last_step("Saudi Arabia", 1))
 
 	def test_new_corridor_added_as_pure_data_no_code_change(self):

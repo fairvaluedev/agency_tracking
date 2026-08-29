@@ -7,6 +7,18 @@ import frappe
 from frappe.utils import today
 
 from agency_tracking.clearance_engine import assign_clearance_step
+from agency_tracking.agency_tracking.doctype.clearance_step.clearance_step import CLEARANCE_ROLE_BY_STEP_TYPE
+
+# LMIS (both countries) completes to "Issued" -- everything else that uses the plain
+# complete_clearance_step() path (Taeshir, Telesign) uses the generic "Complete". Embassy
+# (Saudi + Kuwait) does NOT go through this function at all -- its Pending -> Submitted ->
+# Stamped/Rejected flow needs its own functions below (a remark is required for Rejected,
+# and "Stamped" isn't just "the step finished", it's a specific outcome distinct from failure).
+TERMINAL_STATUS_BY_STEP_TYPE = {
+	"LMIS Clearance": "Issued",
+	"Kuwait LMIS": "Issued",
+}
+DEFAULT_TERMINAL_STATUS = "Complete"
 
 
 def _is_assigned_officer(clearance_step_name):
@@ -23,25 +35,21 @@ def _is_assigned_officer(clearance_step_name):
 	)
 
 
-@frappe.whitelist()
-def complete_clearance_step(clearance_step_name, reference_no=None, amount=None):
-	"""Mark a Clearance Step complete. Only the officer currently ToDo-assigned to this exact
-	row, or Manager/Admin, may do so — Part G's "per-row" scoping applies here too, not just
-	to reads."""
-	if not (_is_assigned_officer(clearance_step_name) or {"Manager", "Admin"} & set(frappe.get_roles())):
-		frappe.throw("Not permitted.", frappe.PermissionError)
+def _can_act_on_step(step):
+	"""Manager/Admin always; the officer currently ToDo-assigned to this exact row (Clearance
+	Officer/Ticketer's per-row model); or anyone holding the role mapped to this step_type
+	(the six country+step roles' blanket-by-type model) — see clearance_step.py's
+	CLEARANCE_ROLE_BY_STEP_TYPE and get_permission_query_conditions for the read-side of the
+	same rule."""
+	if {"Manager", "Admin"} & set(frappe.get_roles()):
+		return True
+	if _is_assigned_officer(step.name):
+		return True
+	required_role = CLEARANCE_ROLE_BY_STEP_TYPE.get(step.step_type)
+	return bool(required_role and required_role in frappe.get_roles())
 
-	step = frappe.get_doc("Clearance Step", clearance_step_name)
-	step.status = "Complete"
-	step.date_completed = today()
-	step.completed_by = frappe.session.user
-	if reference_no:
-		step.reference_no = reference_no
-	if amount is not None:
-		step.amount = amount
-		step.payment_status = "Paid"
-	step.save(ignore_permissions=True)
 
+def _close_open_todos(clearance_step_name):
 	open_todos = frappe.get_all(
 		"ToDo",
 		filters={"reference_type": "Clearance Step", "reference_name": clearance_step_name, "status": "Open"},
@@ -50,17 +58,93 @@ def complete_clearance_step(clearance_step_name, reference_no=None, amount=None)
 	for todo_name in open_todos:
 		frappe.db.set_value("ToDo", todo_name, "status", "Closed")
 
+
+@frappe.whitelist()
+def complete_clearance_step(clearance_step_name, reference_no=None, amount=None):
+	"""Mark a Clearance Step complete/Issued. Not for Embassy steps -- use
+	submit_embassy_step/stamp_embassy_step/reject_embassy_step instead."""
+	step = frappe.get_doc("Clearance Step", clearance_step_name)
+	if step.step_type in ("Embassy", "Kuwait Embassy"):
+		frappe.throw(
+			"Embassy steps use submit_embassy_step/stamp_embassy_step/reject_embassy_step, not complete_clearance_step.",
+			frappe.ValidationError,
+		)
+	if not _can_act_on_step(step):
+		frappe.throw("Not permitted.", frappe.PermissionError)
+
+	step.status = TERMINAL_STATUS_BY_STEP_TYPE.get(step.step_type, DEFAULT_TERMINAL_STATUS)
+	step.date_completed = today()
+	step.completed_by = frappe.session.user
+	if reference_no:
+		step.reference_no = reference_no
+	if amount is not None:
+		step.amount = amount
+		step.payment_status = "Paid"
+	step.save(ignore_permissions=True)
+	_close_open_todos(clearance_step_name)
 	return step.as_dict()
 
 
 @frappe.whitelist()
 def start_clearance_step(clearance_step_name):
-	if not (_is_assigned_officer(clearance_step_name) or {"Manager", "Admin"} & set(frappe.get_roles())):
-		frappe.throw("Not permitted.", frappe.PermissionError)
 	step = frappe.get_doc("Clearance Step", clearance_step_name)
+	if not _can_act_on_step(step):
+		frappe.throw("Not permitted.", frappe.PermissionError)
 	step.status = "In Progress"
 	step.date_started = today()
 	step.save(ignore_permissions=True)
+	return step.as_dict()
+
+
+@frappe.whitelist()
+def submit_embassy_step(clearance_step_name):
+	"""Documents submitted (Monday). Saudi/Kuwait Embassy only."""
+	step = frappe.get_doc("Clearance Step", clearance_step_name)
+	if step.step_type not in ("Embassy", "Kuwait Embassy"):
+		frappe.throw("Only meaningful for an Embassy clearance step.", frappe.ValidationError)
+	if not _can_act_on_step(step):
+		frappe.throw("Not permitted.", frappe.PermissionError)
+	step.status = "Submitted"
+	step.date_started = today()
+	step.save(ignore_permissions=True)
+	return step.as_dict()
+
+
+@frappe.whitelist()
+def stamp_embassy_step(clearance_step_name, reference_no=None):
+	"""Documents returned stamped (Thursday) -- the success outcome."""
+	step = frappe.get_doc("Clearance Step", clearance_step_name)
+	if step.step_type not in ("Embassy", "Kuwait Embassy"):
+		frappe.throw("Only meaningful for an Embassy clearance step.", frappe.ValidationError)
+	if not _can_act_on_step(step):
+		frappe.throw("Not permitted.", frappe.PermissionError)
+	step.status = "Stamped"
+	step.date_completed = today()
+	step.completed_by = frappe.session.user
+	if reference_no:
+		step.reference_no = reference_no
+	step.save(ignore_permissions=True)
+	_close_open_todos(clearance_step_name)
+	return step.as_dict()
+
+
+@frappe.whitelist()
+def reject_embassy_step(clearance_step_name, rejection_remark):
+	"""Documents returned rejected (Thursday) -- requires a written remark
+	(Clearance Step.validate() also enforces this as a backstop)."""
+	if not rejection_remark:
+		frappe.throw("A rejection remark is required.", frappe.ValidationError)
+	step = frappe.get_doc("Clearance Step", clearance_step_name)
+	if step.step_type not in ("Embassy", "Kuwait Embassy"):
+		frappe.throw("Only meaningful for an Embassy clearance step.", frappe.ValidationError)
+	if not _can_act_on_step(step):
+		frappe.throw("Not permitted.", frappe.PermissionError)
+	step.status = "Rejected"
+	step.rejection_remark = rejection_remark
+	step.date_completed = today()
+	step.completed_by = frappe.session.user
+	step.save(ignore_permissions=True)
+	_close_open_todos(clearance_step_name)
 	return step.as_dict()
 
 
@@ -76,9 +160,10 @@ def reassign_clearance_step(clearance_step_name, new_officer):
 
 @frappe.whitelist()
 def list_my_clearance_steps():
-	"""A Clearance Officer / Ticketing-Dispatch user's own queue — driven entirely by the same
-	ToDo-based permission scoping as direct doctype access (Clearance Step's
-	get_permission_query_conditions), so this and a raw list call return the same rows."""
+	"""A Clearance Officer / Ticketer's own ToDo-scoped queue, or -- for the six country+step
+	roles -- every row of their matching step_type. Driven entirely by the same permission
+	scoping as direct doctype access (Clearance Step's get_permission_query_conditions), so
+	this and a raw list call return the same rows."""
 	return frappe.get_list(
 		"Clearance Step",
 		fields=["name", "placement", "step_type", "status", "sequence_order", "is_mandatory"],

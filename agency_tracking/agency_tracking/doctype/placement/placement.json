@@ -12,11 +12,49 @@
   "col_break_placement",
   "status",
   "cv_record",
+  "cycle_number",
   "contract_sec",
   "contract_file",
   "contract_signed_date",
+  "contract_details_sec",
+  "contract_number",
+  "visa_number",
+  "employer_name",
+  "employer_national_id",
+  "col_break_contract_details",
+  "employer_address",
+  "saudi_agency_name",
+  "saudi_agency_license",
+  "employment_site",
+  "contract_duration",
+  "contract_salary_amount",
+  "contract_salary_currency",
+  "visa_sec",
+  "visa_file",
+  "visa_type",
+  "visa_issue_date",
+  "visa_expiry_date",
+  "col_break_visa",
+  "visa_reference_number",
+  "sponsor_name",
+  "sponsor_civil_id",
+  "kuwait_agency_name",
+  "kuwait_agency_license",
+  "medical_selected_sec",
+  "medical_selected_examination_date",
+  "medical_selected_status",
+  "medical_selected_expiry_date",
   "medical_2_sec",
   "medical_2_status",
+  "ticketing_sec",
+  "ticket_number",
+  "flight_date",
+  "ticket_cost",
+  "col_break_ticketing",
+  "is_rescheduled",
+  "reschedule_date",
+  "reschedule_cause",
+  "reschedule_cost",
   "commission_sec",
   "manual_commission_amount",
   "manual_commission_currency",
@@ -66,7 +104,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Selected\nProcessing\nStamped\nTicketed\nDeparted",
+   "options": "Selected\nProcessing\nStamped\nTicketed\nDeparted\nCancelled",
    "read_only": 1
   },
   {
@@ -74,6 +112,15 @@
    "fieldtype": "Link",
    "label": "CV Record",
    "options": "CV Record",
+   "read_only": 1
+  },
+  {
+   "default": "1",
+   "description": "Copied from the owning Applicant's cycle_number at creation time (before_insert) -- lets 'show me everything belonging to cycle 2' be a direct filter.",
+   "fieldname": "cycle_number",
+   "fieldtype": "Int",
+   "in_standard_filter": 1,
+   "label": "Cycle Number",
    "read_only": 1
   },
   {
@@ -94,18 +141,228 @@
    "label": "Contract Signed Date"
   },
   {
+   "collapsible": 1,
+   "fieldname": "contract_details_sec",
+   "fieldtype": "Section Break",
+   "label": "Contract Details (parsed, best-effort — all optional)"
+  },
+  {
+   "description": "Saudi (Musaned-style) contracts only.",
+   "fieldname": "contract_number",
+   "fieldtype": "Data",
+   "label": "Contract Number"
+  },
+  {
+   "description": "Saudi: parsed from the contract itself. Kuwait: parsed from the separately-uploaded visa document instead (see visa_number is not duplicated — Kuwait's own visa_number lives under the Visa section below via visa_reference_number/visa_type; this field is Saudi-only).",
+   "fieldname": "visa_number",
+   "fieldtype": "Data",
+   "label": "Visa Number (Saudi)"
+  },
+  {
+   "fieldname": "employer_name",
+   "fieldtype": "Data",
+   "label": "Employer Name"
+  },
+  {
+   "description": "Saudi only — Kuwait contracts don't carry a national ID field.",
+   "fieldname": "employer_national_id",
+   "fieldtype": "Data",
+   "label": "Employer National ID"
+  },
+  {
+   "fieldname": "col_break_contract_details",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "employer_address",
+   "fieldtype": "Small Text",
+   "label": "Employer Address"
+  },
+  {
+   "description": "Saudi Recruiting Agency name, as printed on the contract — used to auto-match against an existing Contractor record.",
+   "fieldname": "saudi_agency_name",
+   "fieldtype": "Data",
+   "label": "Saudi Agency Name"
+  },
+  {
+   "fieldname": "saudi_agency_license",
+   "fieldtype": "Data",
+   "label": "Saudi Agency License No."
+  },
+  {
+   "description": "Kuwait contracts only (\"Employment site\" / city, e.g. Kaifan).",
+   "fieldname": "employment_site",
+   "fieldtype": "Data",
+   "label": "Employment Site (Kuwait)"
+  },
+  {
+   "description": "Kuwait contracts only, e.g. \"two years\".",
+   "fieldname": "contract_duration",
+   "fieldtype": "Data",
+   "label": "Contract Duration (Kuwait)"
+  },
+  {
+   "description": "The contract's own negotiated wage (Saudi: SAR, Kuwait: KD) — distinct from the Applicant's CV-stage expected salary.",
+   "fieldname": "contract_salary_amount",
+   "fieldtype": "Currency",
+   "label": "Contract Salary Amount"
+  },
+  {
+   "fieldname": "contract_salary_currency",
+   "fieldtype": "Select",
+   "label": "Contract Salary Currency",
+   "options": "\nSAR\nKWD\nUSD\nETB\nAED\nQAR"
+  },
+  {
+   "collapsible": 1,
+   "depends_on": "eval:doc.destination_country == 'Kuwait'",
+   "description": "Kuwait only — a separate document, uploaded alongside the contract. Saudi's visa data is already on the contract itself (see contract_number/visa_number above).",
+   "fieldname": "visa_sec",
+   "fieldtype": "Section Break",
+   "label": "Visa (Kuwait)"
+  },
+  {
+   "fieldname": "visa_file",
+   "fieldtype": "Attach",
+   "label": "Visa File"
+  },
+  {
+   "fieldname": "visa_type",
+   "fieldtype": "Data",
+   "label": "Visa Type"
+  },
+  {
+   "fieldname": "visa_issue_date",
+   "fieldtype": "Date",
+   "label": "Visa Issue Date"
+  },
+  {
+   "description": "Saudi: from the contract's own dates. Kuwait: from the visa document. Drives the frontend's \"remaining days\" display — absent if never captured.",
+   "fieldname": "visa_expiry_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Visa Expiry Date"
+  },
+  {
+   "fieldname": "col_break_visa",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "visa_reference_number",
+   "fieldtype": "Data",
+   "label": "Visa Reference Number"
+  },
+  {
+   "description": "The Kuwaiti employer/sponsor (Kafeel) named on the visa — more precise than the contract's bare phone number.",
+   "fieldname": "sponsor_name",
+   "fieldtype": "Data",
+   "label": "Sponsor (Kafeel) Name"
+  },
+  {
+   "fieldname": "sponsor_civil_id",
+   "fieldtype": "Data",
+   "label": "Sponsor Civil ID"
+  },
+  {
+   "description": "Cross-checked against this Placement's own Contractor once the visa is uploaded — a mismatch is flagged (notify), never auto-reassigned.",
+   "fieldname": "kuwait_agency_name",
+   "fieldtype": "Data",
+   "label": "Kuwait Agency Name (from visa)"
+  },
+  {
+   "fieldname": "kuwait_agency_license",
+   "fieldtype": "Data",
+   "label": "Kuwait Agency License No. (from visa)"
+  },
+  {
+   "fieldname": "medical_selected_sec",
+   "fieldtype": "Section Break",
+   "label": "Medical (Selected → Processing gate)"
+  },
+  {
+   "fieldname": "medical_selected_examination_date",
+   "fieldtype": "Date",
+   "label": "Examination Date"
+  },
+  {
+   "default": "Pending",
+   "description": "New post-contract checkpoint (2026-08-29), distinct from the Applicant's earlier registration-time FIT check and the later pre-departure Medical 2 check. UNFIT here cancels the whole Applicant + Placement (applicant_api.cancel_applicant), for every track/country alike. Gates Selected -> Processing (state_machine.medical_selected_gate).",
+   "fieldname": "medical_selected_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Medical Status",
+   "options": "Pending\nFIT\nUNFIT"
+  },
+  {
+   "fieldname": "medical_selected_expiry_date",
+   "fieldtype": "Date",
+   "label": "Expiry Date"
+  },
+  {
    "fieldname": "medical_2_sec",
    "fieldtype": "Section Break",
    "label": "Pre-Departure Medical (Medical 2)"
   },
   {
    "default": "Pending",
-   "description": "Within ~72h of the flight. Separate from the Applicant's earlier registration-time FIT check (Part A.2 Stage 8) — gates Ticketed -> Departed.",
+   "description": "Within ~72h of the flight. Separate from the Applicant's earlier registration-time FIT check (Part A.2 Stage 8) and the Selected-stage check above — gates Ticketed -> Departed.",
    "fieldname": "medical_2_status",
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Medical 2 Status",
    "options": "Pending\nFIT\nUNFIT"
+  },
+  {
+   "fieldname": "ticketing_sec",
+   "fieldtype": "Section Break",
+   "label": "Ticketing"
+  },
+  {
+   "fieldname": "ticket_number",
+   "fieldtype": "Data",
+   "label": "Ticket Number"
+  },
+  {
+   "fieldname": "flight_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Flight Date"
+  },
+  {
+   "description": "Auto-logs a Pending Applicant Transaction expense.",
+   "fieldname": "ticket_cost",
+   "fieldtype": "Currency",
+   "label": "Ticket Cost"
+  },
+  {
+   "fieldname": "col_break_ticketing",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_rescheduled",
+   "fieldtype": "Check",
+   "label": "Rescheduled?"
+  },
+  {
+   "depends_on": "eval:doc.is_rescheduled",
+   "fieldname": "reschedule_date",
+   "fieldtype": "Date",
+   "label": "New Flight Date"
+  },
+  {
+   "depends_on": "eval:doc.is_rescheduled",
+   "fieldname": "reschedule_cause",
+   "fieldtype": "Select",
+   "label": "Reschedule Cause",
+   "options": "\nInternal\nAirport"
+  },
+  {
+   "depends_on": "eval:doc.reschedule_cause == 'Internal'",
+   "description": "Only meaningful when the cause is Internal — an airline/airport-caused reschedule isn't billed to us. Auto-logs a Pending Applicant Transaction expense.",
+   "fieldname": "reschedule_cost",
+   "fieldtype": "Currency",
+   "label": "Reschedule Cost"
   },
   {
    "collapsible": 1,
@@ -151,7 +408,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-25 00:00:00.000000",
+ "modified": "2026-08-29 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Agency Tracking",
  "name": "Placement",
@@ -192,6 +449,16 @@
    "report": 1,
    "role": "Admin",
    "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Contract Parser",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Ticketer",
    "write": 1
   }
  ],

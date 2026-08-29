@@ -81,7 +81,7 @@ class TestChatThread(FrappeTestCase):
 				"email": "ct04-staff@example.com",
 				"first_name": "CT Staff",
 				"send_welcome_email": 0,
-				"roles": [{"role": "Recruitment/Intake"}],
+				"roles": [{"role": "Registrar"}],
 			}
 		).insert(ignore_permissions=True)
 

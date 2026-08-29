@@ -29,7 +29,7 @@ class TestReportAPI(FrappeTestCase):
 		frappe.set_user("Administrator")
 
 	def test_daily_work_report_requires_management_role(self):
-		staff = make_role_user("rep01", "Recruitment/Intake")
+		staff = make_role_user("rep01", "Registrar")
 		frappe.set_user(staff.name)
 		with self.assertRaises(frappe.PermissionError):
 			get_daily_work_report(REPORT_DATE, REPORT_DATE)

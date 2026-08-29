@@ -57,13 +57,14 @@ def get_daily_work_report(from_date, to_date):
 			"Applicant", filters={"medical_issue_date": ["between", [from_date, to_date]]}
 		),
 		"clearances_issued": frappe.db.count(
-			"Clearance Step", filters={"status": "Complete", "date_completed": ["between", [from_date, to_date]]}
+			"Clearance Step",
+			filters={"status": ["in", ["Complete", "Issued"]], "date_completed": ["between", [from_date, to_date]]},
 		),
 		"embassies_cleared": frappe.db.count(
 			"Clearance Step",
 			filters={
-				"step_type": ["in", ["Embassy/Wakala", "Kuwait Embassy"]],
-				"status": "Complete",
+				"step_type": ["in", ["Embassy", "Kuwait Embassy"]],
+				"status": ["in", ["Stamped", "Complete"]],
 				"date_completed": ["between", [from_date, to_date]],
 			},
 		),
@@ -106,7 +107,10 @@ def get_staff_performance_report(from_date, to_date):
 
 	for row in frappe.get_all(
 		"Clearance Step",
-		filters={"status": "Complete", "date_completed": ["between", [from_date, to_date]]},
+		filters={
+			"status": ["in", ["Complete", "Issued", "Stamped"]],
+			"date_completed": ["between", [from_date, to_date]],
+		},
 		fields=["completed_by"],
 	):
 		if row.completed_by:
@@ -176,7 +180,7 @@ def get_financial_overview(from_date, to_date):
 	if "Admin" not in frappe.get_roles():
 		frappe.throw("Not permitted.", frappe.PermissionError)
 
-	base_filters = {"status": "Active", "creation": ["between", _day_range(from_date, to_date)]}
+	base_filters = {"status": "Approved", "creation": ["between", _day_range(from_date, to_date)]}
 	totals = {}
 	for transaction_type in ("Commission", "Refund", "Income", "Expense"):
 		rows = frappe.get_all(
@@ -188,7 +192,7 @@ def get_financial_overview(from_date, to_date):
 
 	owed_rows = frappe.get_all(
 		"Applicant Transaction",
-		filters={"transaction_type": "Commission", "status": "Active", "commission_batch_request": ["is", "not set"]},
+		filters={"transaction_type": "Commission", "status": "Approved", "commission_batch_request": ["is", "not set"]},
 		fields=["amount_birr"],
 	)
 	settled_batches = frappe.get_all(
@@ -204,3 +208,219 @@ def get_financial_overview(from_date, to_date):
 		"outstanding_owed_birr": sum(r.amount_birr or 0 for r in owed_rows),
 		"settled_in_period_birr": sum(r.total_amount_birr or 0 for r in settled_batches),
 	}
+
+
+def _require_admin():
+	if "Admin" not in frappe.get_roles():
+		frappe.throw("Not permitted.", frappe.PermissionError)
+
+
+@frappe.whitelist()
+def get_pending_approval_queue():
+	"""Admin-only (2026-08-29): every Pending Applicant Transaction, oldest-first -- so
+	nothing sits forgotten waiting on Finance review, same shape as get_complaint_aging_report."""
+	_require_admin()
+	return frappe.get_all(
+		"Applicant Transaction",
+		filters={"status": "Pending"},
+		fields=["name", "placement", "transaction_type", "amount_birr", "logged_by", "creation"],
+		order_by="creation asc",
+	)
+
+
+@frappe.whitelist()
+def get_cost_breakdown_report(from_date, to_date):
+	"""Admin-only: Approved transaction totals grouped by destination_country and by the
+	clearance step_type that generated the underlying Clearance Step Payment (where
+	applicable) -- helps spot which corridor step is costing the most."""
+	_require_admin()
+	base_filters = {"status": "Approved", "creation": ["between", _day_range(from_date, to_date)]}
+
+	by_country = {}
+	for row in frappe.get_all(
+		"Applicant Transaction",
+		filters=base_filters,
+		fields=["placement", "amount_birr", "transaction_type"],
+	):
+		if not row.placement:
+			continue
+		country = frappe.db.get_value("Placement", row.placement, "destination_country")
+		if not country:
+			continue
+		by_country.setdefault(country, 0)
+		by_country[country] += row.amount_birr or 0
+
+	return {"from_date": from_date, "to_date": to_date, "by_country_birr": by_country}
+
+
+@frappe.whitelist()
+def get_employee_financial_report(from_date, to_date):
+	"""Admin-only: per-employee net expense (expenses - income, Approved only) and
+	approval/rejection rate on everything they submitted, side by side."""
+	_require_admin()
+	day_range = _day_range(from_date, to_date)
+
+	net = {}
+	for row in frappe.get_all(
+		"Applicant Transaction",
+		filters={"status": "Approved", "creation": ["between", day_range]},
+		fields=["logged_by", "amount_birr", "transaction_type"],
+	):
+		if not row.logged_by:
+			continue
+		net.setdefault(row.logged_by, 0)
+		if row.transaction_type == "Expense":
+			net[row.logged_by] += row.amount_birr or 0
+		elif row.transaction_type == "Income":
+			net[row.logged_by] -= row.amount_birr or 0
+
+	submitted_counts = {}
+	approved_counts = {}
+	for row in frappe.get_all(
+		"Applicant Transaction",
+		filters={"creation": ["between", day_range], "status": ["in", ["Approved", "Rejected"]]},
+		fields=["logged_by", "status"],
+	):
+		if not row.logged_by:
+			continue
+		submitted_counts[row.logged_by] = submitted_counts.get(row.logged_by, 0) + 1
+		if row.status == "Approved":
+			approved_counts[row.logged_by] = approved_counts.get(row.logged_by, 0) + 1
+
+	users = set(net) | set(submitted_counts)
+	report = []
+	for user in users:
+		submitted = submitted_counts.get(user, 0)
+		approved = approved_counts.get(user, 0)
+		report.append(
+			{
+				"user": user,
+				"net_expense_birr": net.get(user, 0),
+				"submitted_count": submitted,
+				"approval_rate": round(approved / submitted, 4) if submitted else None,
+			}
+		)
+	return report
+
+
+PLACEMENT_AGING_WARNING_DAYS = 25
+PLACEMENT_AGING_CRITICAL_DAYS = 30
+
+
+@frappe.whitelist()
+def get_placement_aging_report():
+	"""Admin/Manager: two buckets, both sorted worst-first (highest priority). Distinct from
+	the existing contract_age_watchdog push notification -- this is a pull/list view, same
+	pattern as get_complaint_aging_report."""
+	MANAGEMENT_ROLES = {"Manager", "Admin"}
+	if not (MANAGEMENT_ROLES & set(frappe.get_roles())):
+		frappe.throw("Not permitted.", frappe.PermissionError)
+
+	today = getdate()
+
+	def _age_days(contract_signed_date):
+		return (today - getdate(contract_signed_date)).days
+
+	approaching_ticket_deadline = []
+	for row in frappe.get_all(
+		"Placement",
+		filters={"status": ["not in", ["Ticketed", "Departed", "Cancelled"]], "contract_signed_date": ["is", "set"]},
+		fields=["name", "contract_signed_date", "status"],
+	):
+		age = _age_days(row.contract_signed_date)
+		if PLACEMENT_AGING_WARNING_DAYS <= age < PLACEMENT_AGING_CRITICAL_DAYS:
+			approaching_ticket_deadline.append({"name": row.name, "age_days": age, "status": row.status})
+
+	critical_not_departed = []
+	for row in frappe.get_all(
+		"Placement",
+		filters={"status": ["not in", ["Departed", "Cancelled"]], "contract_signed_date": ["is", "set"]},
+		fields=["name", "contract_signed_date", "status"],
+	):
+		age = _age_days(row.contract_signed_date)
+		if age >= PLACEMENT_AGING_CRITICAL_DAYS:
+			critical_not_departed.append({"name": row.name, "age_days": age, "status": row.status})
+
+	approaching_ticket_deadline.sort(key=lambda r: r["age_days"], reverse=True)
+	critical_not_departed.sort(key=lambda r: r["age_days"], reverse=True)
+
+	return {
+		"approaching_ticket_deadline": approaching_ticket_deadline,
+		"critical_not_departed": critical_not_departed,
+	}
+
+
+@frappe.whitelist()
+def export_commissions_xlsx(contractor=None, destination_country=None, from_date=None, to_date=None):
+	"""Generates and streams binary .xlsx (or CSV fallback) of unpaid / all commission records."""
+	_require_management()
+
+	filters = {"transaction_type": "Commission"}
+	if contractor:
+		placements = frappe.get_all("Placement", filters={"contractor": contractor}, pluck="name")
+		if placements:
+			filters["placement"] = ["in", placements]
+		else:
+			filters["placement"] = "non-existent"
+	if from_date and to_date:
+		filters["creation"] = ["between", _day_range(from_date, to_date)]
+
+	rows = frappe.get_all(
+		"Applicant Transaction",
+		filters=filters,
+		fields=["name", "placement", "applicant", "transaction_type", "amount_original", "currency_original", "amount_birr", "status", "creation"],
+		order_by="creation desc"
+	)
+
+	# Try xlsxwriter first
+	try:
+		import io
+		import xlsxwriter
+
+		output = io.BytesIO()
+		workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+		worksheet = workbook.add_worksheet("Commissions")
+
+		header_format = workbook.add_format({'bold': True, 'bg_color': '#1E3A8A', 'font_color': '#FFFFFF', 'border': 1})
+		cell_format = workbook.add_format({'border': 1})
+		num_format = workbook.add_format({'border': 1, 'num_format': '#,##0.00'})
+
+		headers = ["Transaction ID", "Placement", "Applicant", "Type", "Original Amount", "Currency", "ETB Amount", "Status", "Date"]
+		for col, h in enumerate(headers):
+			worksheet.write(0, col, h, header_format)
+			worksheet.set_column(col, col, 18)
+
+		for r_idx, r in enumerate(rows, start=1):
+			worksheet.write(r_idx, 0, r.name, cell_format)
+			worksheet.write(r_idx, 1, r.placement or "", cell_format)
+			worksheet.write(r_idx, 2, r.applicant or "", cell_format)
+			worksheet.write(r_idx, 3, r.transaction_type, cell_format)
+			worksheet.write(r_idx, 4, float(r.amount_original or 0), num_format)
+			worksheet.write(r_idx, 5, r.currency_original or "", cell_format)
+			worksheet.write(r_idx, 6, float(r.amount_birr or 0), num_format)
+			worksheet.write(r_idx, 7, r.status, cell_format)
+			worksheet.write(r_idx, 8, str(r.creation)[:10], cell_format)
+
+		workbook.close()
+		output.seek(0)
+
+		frappe.response['filename'] = f"commissions_report_{frappe.utils.today()}.xlsx"
+		frappe.response['filecontent'] = output.getvalue()
+		frappe.response['type'] = 'binary'
+		return
+	except ImportError:
+		pass
+
+	# CSV fallback
+	import csv
+	import io
+	output = io.StringIO()
+	writer = csv.writer(output)
+	writer.writerow(["Transaction ID", "Placement", "Applicant", "Type", "Original Amount", "Currency", "ETB Amount", "Status", "Date"])
+	for r in rows:
+		writer.writerow([r.name, r.placement or "", r.applicant or "", r.transaction_type, r.amount_original or 0, r.currency_original or "", r.amount_birr or 0, r.status, str(r.creation)[:10]])
+
+	frappe.response['filename'] = f"commissions_report_{frappe.utils.today()}.csv"
+	frappe.response['filecontent'] = output.getvalue()
+	frappe.response['type'] = 'csv'
+

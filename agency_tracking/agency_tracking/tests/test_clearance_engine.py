@@ -8,7 +8,10 @@ from agency_tracking.agency_tracking.doctype.placement.test_placement import (
 	make_contractor,
 	registered_applicant,
 )
-from agency_tracking.agency_tracking.tests.test_state_machine import selected_placement
+from agency_tracking.agency_tracking.tests.test_state_machine import (
+	complete_all_clearance_steps,
+	selected_placement,
+)
 from agency_tracking.clearance_api import complete_clearance_step
 from agency_tracking.clearance_engine import get_lmis_officer
 from agency_tracking.state_machine import transition
@@ -26,6 +29,9 @@ def saudi_selected_placement(tag):
 			"contractor": contractor.name,
 			"destination_country": "Saudi Arabia",
 			"status": "Selected",
+			# Selected -> Processing gate (2026-08-29 medical checkpoint) -- set FIT up front so
+			# every existing fixture that advances straight to Processing keeps working.
+			"medical_selected_status": "FIT",
 		}
 	).insert(ignore_permissions=True)
 	frappe.db.set_value("Applicant", applicant.name, "active_placement", placement.name)
@@ -46,27 +52,22 @@ class TestClearanceEngine(FrappeTestCase):
 			order_by="sequence_order asc",
 		)
 		self.assertEqual(
-			[s.step_type for s in steps], ["LMIS Clearance", "Taeshir", "Injaz", "Embassy/Wakala"]
+			[s.step_type for s in steps], ["LMIS Clearance", "Taeshir", "Embassy"]
 		)
 
-	def test_auto_assignment_from_step_officer_mapping(self):
+	def test_auto_assignment_broadcasts_todo_to_every_role_holder(self):
+		"""2026-08-29: the six country+step roles replaced per-row Step Officer Mapping
+		assignment for their step types -- every holder of "Saudi LMIS" gets a ToDo, not a
+		single default_officer."""
 		officer = frappe.get_doc(
 			{
 				"doctype": "User",
 				"email": "ce-lmis-officer@example.com",
 				"first_name": "LMIS Officer",
 				"send_welcome_email": 0,
-				"roles": [{"role": "Clearance Officer"}],
+				"roles": [{"role": "Saudi LMIS"}],
 			}
 		).insert(ignore_permissions=True)
-		if not frappe.db.exists("Step Officer Mapping", "LMIS Clearance"):
-			frappe.get_doc(
-				{
-					"doctype": "Step Officer Mapping",
-					"step_type": "LMIS Clearance",
-					"default_officer": officer.name,
-				}
-			).insert(ignore_permissions=True)
 
 		placement = saudi_selected_placement("ce02")
 		transition(placement, "Processing")
@@ -101,8 +102,7 @@ class TestClearanceEngine(FrappeTestCase):
 
 		assign_clearance_step(lmis_step, officer.name)
 
-		for step_name in frappe.get_all("Clearance Step", filters={"placement": placement.name}, pluck="name"):
-			complete_clearance_step(step_name)
+		complete_all_clearance_steps(placement.name)
 
 		transition(placement, "Stamped")
 		ticket_todo = frappe.db.exists(
@@ -127,16 +127,14 @@ class TestClearanceEngine(FrappeTestCase):
 	def test_stamped_succeeds_once_all_mandatory_steps_complete(self):
 		placement = saudi_selected_placement("ce05")
 		transition(placement, "Processing")
-		for step_name in frappe.get_all("Clearance Step", filters={"placement": placement.name}, pluck="name"):
-			complete_clearance_step(step_name)
+		complete_all_clearance_steps(placement.name)
 		transition(placement, "Stamped")
 		self.assertEqual(placement.status, "Stamped")
 
 	def test_full_lifecycle_selected_to_departed(self):
 		placement = saudi_selected_placement("ce06")
 		transition(placement, "Processing")
-		for step_name in frappe.get_all("Clearance Step", filters={"placement": placement.name}, pluck="name"):
-			complete_clearance_step(step_name)
+		complete_all_clearance_steps(placement.name)
 		transition(placement, "Stamped")
 		transition(placement, "Ticketed")
 		frappe.db.set_value("Placement", placement.name, "medical_2_status", "FIT")

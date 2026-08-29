@@ -12,7 +12,8 @@
   "mentioned_applicant",
   "mentioned_placement",
   "message_sec",
-  "message"
+  "message",
+  "attachment"
  ],
  "fields": [
   {
@@ -59,8 +60,13 @@
   {
    "fieldname": "message",
    "fieldtype": "Small Text",
-   "label": "Message",
-   "reqd": 1
+   "label": "Message"
+  },
+  {
+   "description": "2026-08-29: image/file attachment -- chat was text-only before this. A message must have at least a message or an attachment (chat_api.send_message enforces this).",
+   "fieldname": "attachment",
+   "fieldtype": "Attach",
+   "label": "Attachment"
   }
  ],
  "index_web_pages_for_search": 1,

@@ -7,6 +7,7 @@
  "engine": "InnoDB",
  "field_order": [
   "placement",
+  "cycle_number",
   "transaction_type",
   "stage_logged_at",
   "col_break_txn",
@@ -20,17 +21,30 @@
   "fx_rate_date",
   "amount_birr",
   "description",
-  "commission_batch_request"
+  "receipt_image",
+  "commission_batch_request",
+  "approval_sec",
+  "approved_by",
+  "approved_on",
+  "col_break_approval",
+  "rejection_reason"
  ],
  "fields": [
   {
-   "description": "Part B: optional — not every transaction is placement-scoped (e.g. general agency overhead logged directly by Finance Manager).",
+   "description": "Part B: optional — not every transaction is placement-scoped (e.g. general agency overhead logged directly by staff).",
    "fieldname": "placement",
    "fieldtype": "Link",
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Placement",
    "options": "Placement",
+   "read_only": 1
+  },
+  {
+   "description": "Copied from the owning Applicant/Placement's cycle_number at creation time, when placement is set.",
+   "fieldname": "cycle_number",
+   "fieldtype": "Int",
+   "label": "Cycle Number",
    "read_only": 1
   },
   {
@@ -55,13 +69,14 @@
    "fieldtype": "Column Break"
   },
   {
-   "default": "Active",
+   "default": "Pending",
+   "description": "2026-08-29: any internal staff can log an entry (Pending); only Finance Manager/Admin approval moves it to Approved, at which point it counts toward ledger/balance totals. Rejected/Voided never count.",
    "fieldname": "status",
    "fieldtype": "Select",
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Active\nVoided",
+   "options": "Pending\nApproved\nRejected\nVoided",
    "read_only": 1
   },
   {
@@ -121,7 +136,13 @@
   {
    "fieldname": "description",
    "fieldtype": "Small Text",
-   "label": "Description"
+   "label": "Description/Remark"
+  },
+  {
+   "description": "Uploaded to Cloudflare R2 (agency/{applicant}/finance-receipts/) — only the resulting URL is stored here, not a local Frappe file.",
+   "fieldname": "receipt_image",
+   "fieldtype": "Data",
+   "label": "Receipt Image URL"
   },
   {
    "fieldname": "commission_batch_request",
@@ -130,11 +151,40 @@
    "label": "Commission Batch Request",
    "options": "Commission Batch Request",
    "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "approval_sec",
+   "fieldtype": "Section Break",
+   "label": "Approval"
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved/Rejected By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved/Rejected On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "col_break_approval",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.status == 'Rejected'",
+   "fieldname": "rejection_reason",
+   "fieldtype": "Small Text",
+   "label": "Rejection Reason"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-25 00:00:00.000000",
+ "modified": "2026-08-29 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Agency Tracking",
  "name": "Applicant Transaction",
@@ -173,6 +223,83 @@
    "role": "Admin",
    "share": 1,
    "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Registrar"
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Clearance Officer"
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Ticketer"
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Complaint Manager"
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Contract Parser"
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Saudi LMIS"
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Saudi Taeshir"
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Saudi Embassy"
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Kuwait LMIS"
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Kuwait Telesign"
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Kuwait Embassy"
   }
  ],
  "search_fields": "placement,transaction_type,status",

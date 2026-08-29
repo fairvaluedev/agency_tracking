@@ -38,7 +38,7 @@ class TestClearanceAPI(FrappeTestCase):
 		frappe.set_user(officer.name)
 		start_clearance_step(step_name)
 		result = complete_clearance_step(step_name, reference_no="REF-123")
-		self.assertEqual(result["status"], "Complete")
+		self.assertEqual(result["status"], "Issued")
 		self.assertEqual(result["reference_no"], "REF-123")
 
 	def test_unassigned_officer_cannot_complete(self):
@@ -87,7 +87,7 @@ class TestClearanceAPI(FrappeTestCase):
 
 		frappe.set_user(manager.name)
 		result = complete_clearance_step(step_name)
-		self.assertEqual(result["status"], "Complete")
+		self.assertEqual(result["status"], "Issued")
 
 	def test_reassignment_restricted_to_manager(self):
 		placement = saudi_selected_placement("ca04")

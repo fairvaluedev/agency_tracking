@@ -8,6 +8,9 @@
  "field_order": [
   "identity_sec",
   "entry_track",
+  "first_name",
+  "middle_name",
+  "last_name",
   "full_name",
   "gender",
   "nationality",
@@ -15,6 +18,10 @@
   "phone",
   "address",
   "date_of_birth",
+  "height",
+  "weight",
+  "complexion",
+  "photo_full_body",
   "registration_sec",
   "national_id",
   "labor_id",
@@ -28,6 +35,7 @@
   "salary_currency",
   "emergency_contact_name",
   "emergency_contact_phone",
+  "emergency_contact_address",
   "passport_sec",
   "passport_number",
   "passport_issue_date",
@@ -43,9 +51,56 @@
   "medical_expiry_date",
   "musaned_sec",
   "musaned_status",
+  "education_experience_sec",
+  "institution",
+  "graduation_year",
+  "english_level",
+  "arabic_level",
+  "col_break_edu",
+  "current_employer",
+  "years_of_experience",
+  "experience_country",
+  "experience_period",
+  "education_remarks",
+  "skills_sec",
+  "skill_cleaning",
+  "skill_cooking",
+  "skill_washing",
+  "skill_ironing",
+  "col_break_skills",
+  "skill_baby_sitting",
+  "skill_children_care",
+  "skill_arabic_cooking",
+  "skill_elderly_care",
+  "skill_driving",
+  "skill_sewing",
+  "coc_exam_sec",
+  "coc_status",
+  "exam_date",
+  "additional_info_sec",
+  "children",
+  "city",
+  "country",
+  "col_break_additional",
+  "region",
+  "sub_region",
+  "leaving_town",
+  "alternate_phone",
+  "email",
+  "remarks",
+  "medical_remarks",
+  "fees_sec",
+  "fee_required",
+  "registration_fee_amount",
+  "fee_type",
+  "fee_direction",
+  "fee_status",
+  "fee_payment_date",
+  "fee_notes",
   "lifecycle_sec",
   "status",
-  "active_placement"
+  "active_placement",
+  "cycle_number"
  ],
  "fields": [
   {
@@ -64,11 +119,27 @@
    "reqd": 1
   },
   {
+   "fieldname": "first_name",
+   "fieldtype": "Data",
+   "label": "First Name"
+  },
+  {
+   "fieldname": "middle_name",
+   "fieldtype": "Data",
+   "label": "Middle Name"
+  },
+  {
+   "fieldname": "last_name",
+   "fieldtype": "Data",
+   "label": "Last Name"
+  },
+  {
    "fieldname": "full_name",
    "fieldtype": "Data",
    "in_global_search": 1,
    "in_list_view": 1,
-   "label": "Name"
+   "label": "Name",
+   "description": "Auto-filled from First/Middle/Last Name if left blank."
   },
   {
    "fieldname": "gender",
@@ -104,6 +175,27 @@
    "label": "Date of Birth"
   },
   {
+   "fieldname": "height",
+   "fieldtype": "Data",
+   "label": "Height"
+  },
+  {
+   "fieldname": "weight",
+   "fieldtype": "Data",
+   "label": "Weight"
+  },
+  {
+   "fieldname": "complexion",
+   "fieldtype": "Select",
+   "label": "Complexion",
+   "options": "\nFAIR\nMEDIUM\nDARK"
+  },
+  {
+   "fieldname": "photo_full_body",
+   "fieldtype": "Attach Image",
+   "label": "Full Body Photo"
+  },
+  {
    "fieldname": "registration_sec",
    "fieldtype": "Section Break",
    "label": "Registration (Standard: full floor / Muayena: not required)"
@@ -133,7 +225,7 @@
    "fieldname": "religion",
    "fieldtype": "Select",
    "label": "Religion",
-   "options": "\nMuslim\nOrthodox Christian\nProtestant\nCatholic\nOther"
+   "options": "\nMuslim\nOrthodox\nProtestant\nCatholic\nOther"
   },
   {
    "depends_on": "eval:doc.entry_track == 'Standard'",
@@ -157,7 +249,7 @@
    "fieldname": "education",
    "fieldtype": "Select",
    "label": "Education",
-   "options": "\nPrimary School\nMiddle School\nHigh School\nDiploma\nBachelor's Degree\nOther"
+   "options": "\nHigh School\nAssociate Degree\nBachelor's Degree\nMaster's Degree\nDoctorate\nOther"
   },
   {
    "depends_on": "eval:doc.entry_track == 'Standard'",
@@ -184,6 +276,12 @@
    "fieldtype": "Data",
    "label": "Emergency Contact Phone",
    "options": "Phone"
+  },
+  {
+   "depends_on": "eval:doc.entry_track == 'Standard'",
+   "fieldname": "emergency_contact_address",
+   "fieldtype": "Small Text",
+   "label": "Emergency Contact Address"
   },
   {
    "fieldname": "passport_sec",
@@ -268,6 +366,246 @@
    "options": "Not Applicable\nPending\nALTEYAZECHEM\nTEYZALECH"
   },
   {
+   "collapsible": 1,
+   "fieldname": "education_experience_sec",
+   "fieldtype": "Section Break",
+   "label": "Education & Experience (optional detail)"
+  },
+  {
+   "fieldname": "institution",
+   "fieldtype": "Data",
+   "label": "Institution"
+  },
+  {
+   "fieldname": "graduation_year",
+   "fieldtype": "Int",
+   "label": "Graduation Year"
+  },
+  {
+   "fieldname": "english_level",
+   "fieldtype": "Select",
+   "label": "English Level",
+   "options": "\nNone\nBasic\nGood\nFluent"
+  },
+  {
+   "fieldname": "arabic_level",
+   "fieldtype": "Select",
+   "label": "Arabic Level",
+   "options": "\nNone\nBasic\nGood\nFluent"
+  },
+  {
+   "fieldname": "col_break_edu",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "current_employer",
+   "fieldtype": "Data",
+   "label": "Current / Last Employer"
+  },
+  {
+   "fieldname": "years_of_experience",
+   "fieldtype": "Int",
+   "label": "Years of Experience"
+  },
+  {
+   "fieldname": "experience_country",
+   "fieldtype": "Data",
+   "label": "Experience Country"
+  },
+  {
+   "fieldname": "experience_period",
+   "fieldtype": "Data",
+   "label": "Experience Period"
+  },
+  {
+   "fieldname": "education_remarks",
+   "fieldtype": "Small Text",
+   "label": "Education Remarks"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "skills_sec",
+   "fieldtype": "Section Break",
+   "label": "Skills"
+  },
+  {
+   "fieldname": "skill_cleaning",
+   "fieldtype": "Check",
+   "label": "Cleaning"
+  },
+  {
+   "fieldname": "skill_cooking",
+   "fieldtype": "Check",
+   "label": "Cooking"
+  },
+  {
+   "fieldname": "skill_washing",
+   "fieldtype": "Check",
+   "label": "Washing"
+  },
+  {
+   "fieldname": "skill_ironing",
+   "fieldtype": "Check",
+   "label": "Ironing"
+  },
+  {
+   "fieldname": "col_break_skills",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "skill_baby_sitting",
+   "fieldtype": "Check",
+   "label": "Baby Sitting"
+  },
+  {
+   "fieldname": "skill_children_care",
+   "fieldtype": "Check",
+   "label": "Children Care"
+  },
+  {
+   "fieldname": "skill_arabic_cooking",
+   "fieldtype": "Check",
+   "label": "Arabic Cooking"
+  },
+  {
+   "fieldname": "skill_elderly_care",
+   "fieldtype": "Check",
+   "label": "Elderly Care"
+  },
+  {
+   "fieldname": "skill_driving",
+   "fieldtype": "Check",
+   "label": "Driving"
+  },
+  {
+   "fieldname": "skill_sewing",
+   "fieldtype": "Check",
+   "label": "Sewing"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "coc_exam_sec",
+   "fieldtype": "Section Break",
+   "label": "COC & Exam"
+  },
+  {
+   "fieldname": "coc_status",
+   "fieldtype": "Select",
+   "label": "COC Status",
+   "options": "\nPending\nIssued\nNot Started"
+  },
+  {
+   "fieldname": "exam_date",
+   "fieldtype": "Date",
+   "label": "Exam Date"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "additional_info_sec",
+   "fieldtype": "Section Break",
+   "label": "Additional Info"
+  },
+  {
+   "fieldname": "children",
+   "fieldtype": "Int",
+   "label": "Number of Children"
+  },
+  {
+   "fieldname": "city",
+   "fieldtype": "Data",
+   "label": "City"
+  },
+  {
+   "fieldname": "country",
+   "fieldtype": "Data",
+   "label": "Country of Residence"
+  },
+  {
+   "fieldname": "col_break_additional",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "region",
+   "fieldtype": "Data",
+   "label": "Region"
+  },
+  {
+   "fieldname": "sub_region",
+   "fieldtype": "Data",
+   "label": "Sub Region"
+  },
+  {
+   "fieldname": "leaving_town",
+   "fieldtype": "Data",
+   "label": "Leaving Town"
+  },
+  {
+   "fieldname": "alternate_phone",
+   "fieldtype": "Data",
+   "label": "Alternate Phone",
+   "options": "Phone"
+  },
+  {
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "label": "Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "medical_remarks",
+   "fieldtype": "Small Text",
+   "label": "Medical Remarks"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "fees_sec",
+   "fieldtype": "Section Break",
+   "label": "Registration Fee"
+  },
+  {
+   "fieldname": "fee_required",
+   "fieldtype": "Check",
+   "label": "Fee Required"
+  },
+  {
+   "fieldname": "registration_fee_amount",
+   "fieldtype": "Currency",
+   "label": "Registration Fee Amount"
+  },
+  {
+   "fieldname": "fee_type",
+   "fieldtype": "Select",
+   "label": "Fee Type",
+   "options": "Registration Fee\nProcessing Fee\nVisa Fee\nOther"
+  },
+  {
+   "fieldname": "fee_direction",
+   "fieldtype": "Select",
+   "label": "Fee Direction",
+   "options": "Income\nExpense"
+  },
+  {
+   "fieldname": "fee_status",
+   "fieldtype": "Select",
+   "label": "Fee Status",
+   "options": "Pending\nPaid\nExpired\nRefunded"
+  },
+  {
+   "fieldname": "fee_payment_date",
+   "fieldtype": "Date",
+   "label": "Fee Payment Date"
+  },
+  {
+   "fieldname": "fee_notes",
+   "fieldtype": "Small Text",
+   "label": "Fee Notes"
+  },
+  {
    "fieldname": "lifecycle_sec",
    "fieldtype": "Section Break",
    "label": "Lifecycle"
@@ -279,7 +617,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Draft\nRegistered\nCV Generated",
+   "options": "Draft\nRegistered\nCV Generated\nCancelled",
    "read_only": 1
   },
   {
@@ -289,6 +627,15 @@
    "in_standard_filter": 1,
    "label": "Active Placement",
    "options": "Placement",
+   "read_only": 1
+  },
+  {
+   "default": "1",
+   "description": "Increments only on a genuine regression to Draft/Registered from an already-completed state (Registered, CV Generated, Cancelled) -- never on a plain edit. Set by state_machine's TRANSITION_SIDE_EFFECTS, never editable directly.",
+   "fieldname": "cycle_number",
+   "fieldtype": "Int",
+   "in_standard_filter": 1,
+   "label": "Cycle Number",
    "read_only": 1
   }
  ],
@@ -320,7 +667,7 @@
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "Recruitment/Intake",
+   "role": "Registrar",
    "share": 1,
    "write": 1
   },

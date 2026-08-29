@@ -6,6 +6,7 @@ from frappe.tests.utils import FrappeTestCase
 
 from agency_tracking.agency_tracking.doctype.placement.test_placement import make_contractor
 from agency_tracking.agency_tracking.tests.test_clearance_engine import saudi_selected_placement
+from agency_tracking.agency_tracking.tests.test_state_machine import complete_all_clearance_steps
 from agency_tracking.clearance_api import complete_clearance_step
 from agency_tracking.finance_engine import (
 	accrue_commission,
@@ -33,8 +34,7 @@ def departed_placement(tag, amount=250):
 	)
 	placement.reload()
 	transition(placement, "Processing")
-	for step_name in frappe.get_all("Clearance Step", filters={"placement": placement.name}, pluck="name"):
-		complete_clearance_step(step_name)
+	complete_all_clearance_steps(placement.name)
 	transition(placement, "Stamped")
 	transition(placement, "Ticketed")
 	frappe.db.set_value("Placement", placement.name, "medical_2_status", "FIT")
@@ -151,8 +151,7 @@ class TestFinanceEngine(FrappeTestCase):
 		placement.reload()
 
 		transition(placement, "Processing")
-		for step_name in frappe.get_all("Clearance Step", filters={"placement": placement.name}, pluck="name"):
-			complete_clearance_step(step_name)
+		complete_all_clearance_steps(placement.name)
 		transition(placement, "Stamped")
 		transition(placement, "Ticketed")
 		frappe.db.set_value("Placement", placement.name, "medical_2_status", "FIT")
@@ -162,7 +161,7 @@ class TestFinanceEngine(FrappeTestCase):
 		self.assertTrue(
 			frappe.db.exists(
 				"Applicant Transaction",
-				{"placement": placement.name, "transaction_type": "Commission", "status": "Active"},
+				{"placement": placement.name, "transaction_type": "Commission", "status": "Approved"},
 			)
 		)
 
@@ -230,14 +229,14 @@ class TestFinanceEngine(FrappeTestCase):
 					"contractor": contractor.name,
 					"destination_country": "Saudi Arabia",
 					"status": "Selected",
+					"medical_selected_status": "FIT",
 					"manual_commission_amount": 100,
 					"manual_commission_currency": "USD",
 				}
 			).insert(ignore_permissions=True)
 			frappe.db.set_value("Applicant", applicant.name, "active_placement", placement.name)
 			transition(placement, "Processing")
-			for step_name in frappe.get_all("Clearance Step", filters={"placement": placement.name}, pluck="name"):
-				complete_clearance_step(step_name)
+			complete_all_clearance_steps(placement.name)
 			transition(placement, "Stamped")
 			transition(placement, "Ticketed")
 			frappe.db.set_value("Placement", placement.name, "medical_2_status", "FIT")

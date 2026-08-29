@@ -27,12 +27,32 @@ ALLOWED_TRANSITIONS = {
 	"Applicant": {
 		("Draft", "Registered"),
 		("Registered", "CV Generated"),
+		("Registered", "Cancelled"),
+		("CV Generated", "Cancelled"),
+		# entry_track-forced regression (applicant_api.update_applicant) and Cancelled->restart
+		# (applicant_api.restart_applicant) both land here -- Draft->Cancelled is deliberately
+		# NOT an edge (Cancelled only applies once something is committed, Registered onward).
+		("Registered", "Draft"),
+		("CV Generated", "Draft"),
+		("Cancelled", "Draft"),
+		("Cancelled", "Registered"),
 	},
 	"Placement": {
 		("Selected", "Processing"),
 		("Processing", "Stamped"),
 		("Stamped", "Ticketed"),
 		("Ticketed", "Departed"),
+		# Cancellable from any pre-Departed stage (applicant_api.cancel_applicant cascades
+		# here) -- Departed stays terminal/uncancellable.
+		("Selected", "Cancelled"),
+		("Processing", "Cancelled"),
+		("Stamped", "Cancelled"),
+		("Ticketed", "Cancelled"),
+	},
+	"Applicant Transaction": {
+		("Pending", "Approved"),
+		("Pending", "Rejected"),
+		("Approved", "Voided"),
 	},
 	"Complaint": {
 		("New", "Unresolved"),
@@ -45,7 +65,7 @@ ALLOWED_TRANSITIONS = {
 
 # (from_status, to_status) -> callable(doc) -> bool. Applicant's Draft->Registered move has no
 # cross-doctype gate (just the field-floor/medical check already in Applicant.validate()).
-# Registered->CV Generated is gated on cv_generation_gate (Standard track + Musaned, Step 2).
+# Registered->CV Generated is gated on cv_generation_gate (Standard track only, Step 2).
 # Placement's Ticketed->Departed is gated on medical_2_gate (Step 6). Processing->Stamped is
 # gated on all_mandatory_clearance_steps_complete (Step 7, below). Selected->Processing and
 # Stamped->Ticketed have no gate — nothing to check against for either.
@@ -59,7 +79,7 @@ STAGE_GATES = {}
 TRANSITION_SIDE_EFFECTS = {}
 
 
-def transition(doc, new_status, actor=None, override=False, override_reason=None):
+def transition(doc, new_status, actor=None, override=False, override_reason=None, remarks=None):
 	"""The only sanctioned status-change path. Validates the move is a legal edge for this
 	doctype, runs any registered gate, commits the change (which re-triggers the doctype's
 	own validate() against the new status), logs a Process Event, and returns the saved doc.
@@ -70,6 +90,10 @@ def transition(doc, new_status, actor=None, override=False, override_reason=None
 	ALLOWED_TRANSITIONS topology itself is never overridable; there's no business case in the
 	spec for skipping an entire lifecycle stage, only for forcing past a blocked condition
 	within an otherwise-legal move.
+
+	remarks: recorded on the Process Event same as override_reason, but for plain (non-gated)
+	transitions that still want a reason on the audit trail -- e.g. cancel_applicant's written
+	cancellation reason, which isn't an override of anything.
 	"""
 	current_status = doc.status
 	allowed = ALLOWED_TRANSITIONS.get(doc.doctype, set())
@@ -109,14 +133,14 @@ def transition(doc, new_status, actor=None, override=False, override_reason=None
 			"from_status": current_status,
 			"to_status": new_status,
 			"actor": actor,
-			"remarks": override_reason if is_override else None,
+			"remarks": override_reason if is_override else remarks,
 		}
 	).insert(ignore_permissions=True)
 
 	side_effect = TRANSITION_SIDE_EFFECTS.get((doc.doctype, new_status))
 	if side_effect:
 		try:
-			side_effect(doc)
+			side_effect(doc, current_status)
 		except Exception:
 			# Side effects run after the transition has already committed (doc.save() +
 			# Process Event, both above). Letting an exception here propagate would make
@@ -135,32 +159,15 @@ def transition(doc, new_status, actor=None, override=False, override_reason=None
 	return doc
 
 
-# --- Musaned gate (Part A.2) ---
-# Wired into CV generation (Step 2): registered in STAGE_GATES below, and CV Record.validate()
-# also checks it directly for a clearer, CV-specific error message.
-
-MUSANED_APPROVED_STATUS = "ALTEYAZECHEM"
-MUSANED_BLOCKED_STATUS = "TEYZALECH"
-
-
-def musaned_gate_passed(applicant) -> bool:
-	"""Saudi-bound Standard candidates cannot proceed to CV generation until Musaned status
-	is ALTEYAZECHEM. Not applicable to Kuwait or to Muayena candidates (they skip CV/portal
-	entirely per Part A.1).
-	"""
-	if applicant.entry_track != "Standard":
-		return True
-	if applicant.destination_country != "Saudi Arabia":
-		return True
-	return applicant.musaned_status == MUSANED_APPROVED_STATUS
-
-
 def cv_generation_gate(applicant) -> bool:
-	"""Registered -> CV Generated (Part A.2 Stage 3): Standard track only, and subject to
-	the Musaned gate above."""
-	if applicant.entry_track != "Standard":
-		return False
-	return musaned_gate_passed(applicant)
+	"""Registered -> CV Generated (Part A.2 Stage 3): Standard track only.
+
+	2026-08-29: the Musaned gate (blocking CV generation for Saudi-bound Standard candidates
+	until musaned_status == ALTEYAZECHEM) has been removed per direct instruction. The
+	musaned_status field itself is untouched -- still tracked as data -- it just no longer
+	blocks anything.
+	"""
+	return applicant.entry_track == "Standard"
 
 
 STAGE_GATES[("Registered", "CV Generated")] = cv_generation_gate
@@ -179,8 +186,26 @@ def medical_2_gate(placement) -> bool:
 STAGE_GATES[("Ticketed", "Departed")] = medical_2_gate
 
 
+# --- Post-contract medical gate (2026-08-29, new) ---
+# A fresh checkpoint right after contract upload/Placement creation, distinct from both the
+# Applicant's earlier registration-time FIT check and the pre-departure Medical 2 check above.
+# UNFIT here doesn't just block the gate -- it cancels the whole Applicant + Placement (see
+# applicant_api.cancel_applicant, called by placement_api.record_selected_medical_result).
+# Applies uniformly to Standard (Saudi/Kuwait) and Muayena.
+
+
+def medical_selected_gate(placement) -> bool:
+	return placement.medical_selected_status == "FIT"
+
+
+STAGE_GATES[("Selected", "Processing")] = medical_selected_gate
+
+
 # --- All-mandatory-clearance-steps-complete gate (Part A.2 Stage 6 / Step 7) ---
 # "Stamped — all mandatory corridor steps issued." Optional steps (is_mandatory=0) don't block.
+
+
+CLEARANCE_STEP_DONE_STATUSES = {"Complete", "Issued", "Stamped"}
 
 
 def all_mandatory_clearance_steps_complete(placement) -> bool:
@@ -189,7 +214,7 @@ def all_mandatory_clearance_steps_complete(placement) -> bool:
 		filters={"placement": placement.name, "is_mandatory": 1},
 		fields=["status"],
 	)
-	return bool(steps) and all(s.status == "Complete" for s in steps)
+	return bool(steps) and all(s.status in CLEARANCE_STEP_DONE_STATUSES for s in steps)
 
 
 STAGE_GATES[("Processing", "Stamped")] = all_mandatory_clearance_steps_complete
@@ -212,3 +237,24 @@ def within_free_replacement_window(complaint) -> bool:
 
 
 STAGE_GATES[("Unresolved", "Returned - Free Replacement Required")] = within_free_replacement_window
+
+
+# --- Applicant cycle_number bump (2026-08-29 lifecycle spec) ---
+# "Increments if and only if the status transition lands specifically on Draft or Registered,
+# coming from an already-completed state (Registered, CV Generated, or Cancelled)." Covers both
+# trigger paths uniformly -- entry_track-forced regression (applicant_api.update_applicant) and
+# Cancelled->restart (applicant_api.restart_applicant) -- since both just call transition() and
+# land here. A plain edit that never changes status never touches this at all.
+
+CYCLE_BUMP_FROM_STATUSES = {"Registered", "CV Generated", "Cancelled"}
+
+
+def bump_cycle_number(applicant, from_status):
+	if from_status in CYCLE_BUMP_FROM_STATUSES:
+		frappe.db.set_value(
+			"Applicant", applicant.name, "cycle_number", (applicant.cycle_number or 1) + 1
+		)
+
+
+TRANSITION_SIDE_EFFECTS[("Applicant", "Draft")] = bump_cycle_number
+TRANSITION_SIDE_EFFECTS[("Applicant", "Registered")] = bump_cycle_number

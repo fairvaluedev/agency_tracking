@@ -11,14 +11,18 @@ class ApplicantTransaction(Document):
 		# produced it, regardless of which code path created this row.
 		self.amount_birr = round((self.amount_original or 0) * (self.fx_rate or 0), 2)
 
+		if self.placement and not self.cycle_number:
+			self.cycle_number = frappe.db.get_value("Placement", self.placement, "cycle_number")
+
 
 def get_permission_query_conditions(user):
-	"""Part D: "1=0 permission query condition for everyone except Finance Manager/Admin; not
-	a soft filter, a hard zero." Belt-and-suspenders alongside the doctype-level permissions
-	(which already grant read only to Finance Manager/Admin/System Manager) — if a future step
-	ever broadens doctype-level read, this still holds the line."""
+	"""Part D + 2026-08-29: Finance Manager/Admin see every row (the full ledger). Everyone
+	else who's allowed to log an entry (any internal staff role, per doctype-level create
+	permission) can only see their *own* rows -- not "1=0 for everyone else" anymore, since
+	that would make it impossible for staff to review what they themselves already submitted.
+	"""
 	if not user:
 		user = frappe.session.user
 	if {"Finance Manager", "Admin"} & set(frappe.get_roles(user)):
 		return ""
-	return "1=0"
+	return f"`tabApplicant Transaction`.logged_by = {frappe.db.escape(user)}"

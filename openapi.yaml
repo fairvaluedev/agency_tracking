@@ -1,0 +1,1117 @@
+openapi: 3.0.3
+info:
+  title: agency_tracking API
+  version: "2026-08-29"
+  description: >
+    Overseas Recruitment Processing Platform — Ethiopian domestic worker placements to Saudi
+    Arabia and Kuwait. All business endpoints are Frappe whitelisted RPC methods, called as
+    `POST /api/method/<dotted.path.to.function>` with a JSON body — never raw
+    `/api/resource/<DocType>` access (every doctype's real permission logic lives behind these
+    functions, not the generic REST CRUD surface).
+
+    ## Authentication (session-cookie, not token-based)
+    1. `POST /api/method/login` with `usr`/`pwd` form fields. On success, Frappe sets a session
+       cookie (`sid`) — the browser/HTTP client must persist and resend this cookie on every
+       subsequent request (it is what "being logged in" means here, for staff and foreign
+       agencies alike).
+    2. `GET /api/method/agency_tracking.auth_api.get_current_user` — call this once after login
+       (and once on every fresh page load) to bootstrap "who am I / what can I do". Returns
+       `null` for an anonymous session rather than a 403, so a page refresh before login never
+       looks like an error.
+    3. `GET /api/method/agency_tracking.auth_api.get_csrf_token` — every state-changing POST
+       (i.e. almost everything below) must include the returned token as an `X-Frappe-CSRF-Token`
+       header, or Frappe rejects the request.
+    4. `POST /api/method/logout` to end the session.
+
+    ## File uploads
+    Any endpoint that takes a `file_url` parameter (contract/visa/receipt/bank-statement
+    uploads, passport scans) expects the file to already be uploaded via Frappe's standard file
+    upload endpoint first: `POST /api/method/upload_file` (multipart/form-data, field name
+    `file`), which returns a `file_url` to then pass into the business endpoint.
+
+    ## Response shape
+    Every RPC endpoint below returns `{"message": <return value described in this spec>}` on
+    success (Frappe's standard wrapper) and a non-2xx status with `{"exception": "...",
+    "exc_type": "ValidationError|PermissionError|..."}` on failure.
+
+    ## Roles
+    See the `agency_tracking.roles` Python module for the canonical list — every role name
+    referenced below (e.g. `Registrar`, `Saudi LMIS`) is a custom role this app defines, not
+    one of Frappe's ~30 built-in roles (System Manager, Website Manager, etc.), which have no
+    bearing on this app's own permission checks.
+servers:
+  - url: http://localhost:8000
+    description: Local dev (bench)
+tags:
+  - name: Auth
+    description: Session bootstrap (Frappe's own login/logout + this app's helper endpoints).
+  - name: Applicant Lifecycle
+    description: Draft → Registered → CV Generated → Cancelled, cycle_number, country bans, passport OCR.
+  - name: Placement & Corridor
+    description: Selected → Processing → Stamped → Ticketed → Departed; contract/visa upload; ticketing.
+  - name: Clearance Steps
+    description: LMIS/Taeshir/Embassy/Telesign step actions — country-role-scoped.
+  - name: Portal (Foreign Agency)
+    description: Contractor-facing candidate browsing/selection, Wakala requests.
+  - name: CV
+    description: CV Record generation + PDF.
+  - name: Finance
+    description: Applicant Transaction ledger, FX rates, commission batching.
+  - name: Reconciliation
+    description: Bank statement upload/matching against Commission Batch Requests.
+  - name: Complaints
+    description: Foreign-agency/internal complaint intake and resolution, free replacement.
+  - name: Notifications
+    description: Push subscription + manual reminder triggers.
+  - name: Chat
+    description: Agency ↔ Communication Manager and internal staff↔staff messaging.
+  - name: Reports
+    description: Management/Admin visibility — daily/staff/financial/aging reports.
+  - name: Corridor Config
+    description: Read-only corridor step data (Corridor Definition-backed).
+paths:
+  /api/method/login:
+    post:
+      tags: [Auth]
+      summary: Log in (Frappe built-in, not an agency_tracking function)
+      description: Sets the session cookie used by every subsequent request. Works identically for internal staff and Foreign Agency portal users.
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                usr: { type: string, description: Email/username }
+                pwd: { type: string, description: Password }
+              required: [usr, pwd]
+      responses:
+        "200": { description: Session cookie set. }
+        "401": { description: Invalid credentials. }
+
+  /api/method/logout:
+    post:
+      tags: [Auth]
+      summary: Log out (Frappe built-in)
+      responses:
+        "200": { description: Session ended. }
+
+  /api/method/upload_file:
+    post:
+      tags: [Auth]
+      summary: Upload a file (Frappe built-in) — prerequisite for every file_url parameter below
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200":
+          description: Returns file_url to pass into the relevant business endpoint.
+
+  /api/method/agency_tracking.auth_api.get_csrf_token:
+    get:
+      tags: [Auth]
+      summary: Get the CSRF token required on every state-changing POST
+      responses:
+        "200": { description: "{ message: <token> }" }
+
+  /api/method/agency_tracking.auth_api.get_current_user:
+    get:
+      tags: [Auth]
+      summary: "Who am I / what can I do — SPA bootstrap check"
+      description: allow_guest=True by design; returns null (not a 403) for an anonymous session.
+      responses:
+        "200":
+          description: "{ message: null } if anonymous, else { message: { user, full_name, roles: [...] } }"
+
+  # --- Applicant Lifecycle ---
+  /api/method/agency_tracking.applicant_api.create_applicant:
+    post:
+      tags: [Applicant Lifecycle]
+      summary: Open a new Applicant file at Draft
+      description: Registrar/Manager/Admin only. Draft floor is just full_name, gender, nationality, entry_track — everything else is optional at this stage.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                full_name: { type: string }
+                gender: { type: string, enum: [Female, Male, Other] }
+                nationality: { type: string, description: "Country doctype name" }
+                entry_track: { type: string, enum: [Standard, Muayena] }
+              required: [full_name, gender, nationality, entry_track]
+      responses:
+        "200": { description: Created Applicant as_dict(), status Draft. }
+
+  /api/method/agency_tracking.applicant_api.update_applicant:
+    post:
+      tags: [Applicant Lifecycle]
+      summary: Edit an Applicant still at Draft/Registered
+      description: >
+        Does not change status (use register_applicant for that). Two special behaviors:
+        (1) changing entry_track while Registered/CV Generated forces a regression to Draft
+        first (cycle_number bumps automatically). (2) setting/changing destination_country is
+        checked against Applicant Country Ban ("Ashara Teyezuwal") — throws unless
+        override_ban=true with a Manager/Admin session and a non-empty override_reason.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                applicant_name: { type: string }
+                override_ban: { type: boolean, default: false }
+                override_reason: { type: string }
+              required: [applicant_name]
+              additionalProperties: true
+      responses:
+        "200": { description: Updated Applicant as_dict(). }
+        "403": { description: Banned from the given destination_country and override_ban not set, or override attempted by a non-Manager/Admin. }
+
+  /api/method/agency_tracking.applicant_api.cancel_applicant:
+    post:
+      tags: [Applicant Lifecycle]
+      summary: Cancel an Applicant (Registered/CV Generated only)
+      description: >
+        Freezes any active Placement + its Clearance Steps (marked Cancelled, permanent
+        history) before the Applicant itself moves to Cancelled. Never reachable from Draft.
+        Landing on Cancelled does not bump cycle_number — only a later restart does.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                applicant_name: { type: string }
+                reason: { type: string, description: Required, written cancellation reason. }
+              required: [applicant_name, reason]
+      responses:
+        "200": { description: Cancelled Applicant as_dict(). }
+
+  /api/method/agency_tracking.applicant_api.restart_applicant:
+    post:
+      tags: [Applicant Lifecycle]
+      summary: Restart a Cancelled Applicant back to Draft or Registered
+      description: cycle_number bumps automatically. Restarting straight to Registered fails naturally if the field floor isn't satisfied — retry with target_status=Draft.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                applicant_name: { type: string }
+                target_status: { type: string, enum: [Draft, Registered] }
+              required: [applicant_name, target_status]
+      responses:
+        "200": { description: Restarted Applicant as_dict(). }
+
+  /api/method/agency_tracking.applicant_api.register_applicant:
+    post:
+      tags: [Applicant Lifecycle]
+      summary: Draft → Registered
+      description: Field-floor and medical-FIT checks run inside Applicant.validate(), triggered by the underlying transition()'s save.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { applicant_name: { type: string } }
+              required: [applicant_name]
+      responses:
+        "200": { description: Registered Applicant as_dict(). }
+
+  /api/method/agency_tracking.applicant_api.get_applicant:
+    get:
+      tags: [Applicant Lifecycle]
+      summary: Fetch an Applicant by name
+      parameters:
+        - { name: applicant_name, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Applicant as_dict(). }
+
+  # --- Placement & Corridor ---
+  /api/method/agency_tracking.placement_api.upload_contract:
+    post:
+      tags: [Placement & Corridor]
+      summary: Attach a signed contract to a Standard-track Placement
+      description: >
+        Either the Contractor who made the selection, or internal staff (Contract Parser as
+        fallback), may upload. Extracts contract_signed_date always, plus structured fields by
+        destination_country — Saudi (Musaned-style form): contract_number, visa_number,
+        employer_name, employer_national_id, employer_address, saudi_agency_name,
+        saudi_agency_license, visa_expiry_date. Kuwait (thinner free-text template):
+        employer_name, employment_site, contract_duration, contract_salary_amount/currency
+        only. All best-effort — missing fields just mean manual entry.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                placement_name: { type: string }
+                file_url: { type: string }
+              required: [placement_name, file_url]
+      responses:
+        "200": { description: Updated Placement as_dict(). }
+
+  /api/method/agency_tracking.placement_api.upload_visa:
+    post:
+      tags: [Placement & Corridor]
+      summary: Attach the Kuwait visa document (Kuwait only, alongside the contract)
+      description: >
+        Extracts visa_number/type/issue+expiry dates/reference, sponsor name+civil ID, and
+        kuwait_agency_name/license — fields the Kuwait contract itself never carries. Cross-
+        checks the parsed agency name against this Placement's actual Contractor; a mismatch
+        is flagged via notify() to Manager/Admin, never auto-reassigned.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                placement_name: { type: string }
+                file_url: { type: string }
+              required: [placement_name, file_url]
+      responses:
+        "200": { description: Updated Placement as_dict(). }
+        "400": { description: destination_country is not Kuwait. }
+
+  /api/method/agency_tracking.placement_api.create_muayena_placement:
+    post:
+      tags: [Placement & Corridor]
+      summary: Muayena direct-entry placement ("contract in hand")
+      description: Internal staff only (Registrar/Manager/Admin/Contract Parser) — contractor is always picked manually for both countries. Requires the Applicant to already have destination_country set (required by Registered for Muayena as of 2026-08-29).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                applicant_name: { type: string }
+                contractor_name: { type: string }
+                file_url: { type: string, description: Optional contract file, parsed the same as upload_contract. }
+              required: [applicant_name, contractor_name]
+      responses:
+        "200": { description: New Placement as_dict(), status Selected. }
+
+  /api/method/agency_tracking.placement_api.record_selected_medical_result:
+    post:
+      tags: [Placement & Corridor]
+      summary: Post-contract medical checkpoint (gates Selected → Processing)
+      description: New 2026-08-29 checkpoint, distinct from the Applicant's pre-Registered medical and the later pre-departure Medical 2 check. UNFIT cancels the whole Applicant + Placement via the same cascade as cancel_applicant — applies uniformly to every track/country.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                placement_name: { type: string }
+                status: { type: string, enum: [FIT, UNFIT] }
+                examination_date: { type: string, format: date }
+                expiry_date: { type: string, format: date }
+              required: [placement_name, status]
+      responses:
+        "200": { description: Updated Placement as_dict() (or the resulting Cancelled Applicant's cascade, if UNFIT). }
+
+  /api/method/agency_tracking.placement_api.advance_placement:
+    post:
+      tags: [Placement & Corridor]
+      summary: Move a Placement forward via the sanctioned transition() path
+      description: override_reason attempts a Manager Override if the move is gate-blocked (e.g. Processing→Stamped before all mandatory Clearance Steps are done).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                placement_name: { type: string }
+                new_status: { type: string, enum: [Processing, Stamped, Ticketed, Departed, Cancelled] }
+                override_reason: { type: string }
+              required: [placement_name, new_status]
+      responses:
+        "200": { description: Updated Placement as_dict(). }
+
+  /api/method/agency_tracking.placement_api.record_ticket_details:
+    post:
+      tags: [Placement & Corridor]
+      summary: Record flight/ticket details (Ticketer role)
+      description: ticket_cost, if given, auto-logs a Pending Applicant Transaction expense (Finance approval still required before it counts toward any ledger total).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                placement_name: { type: string }
+                ticket_number: { type: string }
+                flight_date: { type: string, format: date }
+                ticket_cost: { type: number }
+                currency: { type: string, enum: [SAR, KWD, USD, ETB, AED, QAR] }
+              required: [placement_name, ticket_number, flight_date]
+      responses:
+        "200": { description: Updated Placement as_dict(). }
+
+  /api/method/agency_tracking.placement_api.record_reschedule:
+    post:
+      tags: [Placement & Corridor]
+      summary: Record a flight reschedule (Ticketer role)
+      description: reschedule_cost only meaningful/billed when cause is Internal — an Airport/airline-caused reschedule isn't billed to the agency.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                placement_name: { type: string }
+                reschedule_date: { type: string, format: date }
+                reschedule_cause: { type: string, enum: [Internal, Airport] }
+                reschedule_cost: { type: number }
+                currency: { type: string, enum: [SAR, KWD, USD, ETB, AED, QAR] }
+              required: [placement_name, reschedule_date, reschedule_cause]
+      responses:
+        "200": { description: Updated Placement as_dict(). }
+
+  # --- Clearance Steps ---
+  /api/method/agency_tracking.clearance_api.complete_clearance_step:
+    post:
+      tags: [Clearance Steps]
+      summary: Complete a non-Embassy Clearance Step
+      description: >
+        LMIS steps (Saudi LMIS/Kuwait LMIS step_type) complete to status "Issued"; Taeshir/
+        Telesign complete to the generic "Complete". Permission: the officer ToDo-assigned to
+        this exact row, OR anyone holding the role mapped to this step_type (Saudi LMIS/Saudi
+        Taeshir/Saudi Embassy/Kuwait LMIS/Kuwait Telesign/Kuwait Embassy), OR Manager/Admin.
+        Throws if called on an Embassy step (use the three submit/stamp/reject functions below
+        instead).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clearance_step_name: { type: string }
+                reference_no: { type: string }
+                amount: { type: number }
+              required: [clearance_step_name]
+      responses:
+        "200": { description: Updated Clearance Step as_dict(). }
+
+  /api/method/agency_tracking.clearance_api.start_clearance_step:
+    post:
+      tags: [Clearance Steps]
+      summary: Mark a Clearance Step In Progress
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { clearance_step_name: { type: string } }
+              required: [clearance_step_name]
+      responses:
+        "200": { description: Updated Clearance Step as_dict(). }
+
+  /api/method/agency_tracking.clearance_api.submit_embassy_step:
+    post:
+      tags: [Clearance Steps]
+      summary: Embassy step — documents submitted (Monday)
+      description: Saudi Embassy/Kuwait Embassy step_type only.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { clearance_step_name: { type: string } }
+              required: [clearance_step_name]
+      responses:
+        "200": { description: Updated Clearance Step as_dict(), status Submitted. }
+
+  /api/method/agency_tracking.clearance_api.stamp_embassy_step:
+    post:
+      tags: [Clearance Steps]
+      summary: Embassy step — documents returned stamped (Thursday, success outcome)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clearance_step_name: { type: string }
+                reference_no: { type: string }
+              required: [clearance_step_name]
+      responses:
+        "200": { description: Updated Clearance Step as_dict(), status Stamped. }
+
+  /api/method/agency_tracking.clearance_api.reject_embassy_step:
+    post:
+      tags: [Clearance Steps]
+      summary: Embassy step — documents returned rejected (Thursday, failure outcome)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clearance_step_name: { type: string }
+                rejection_remark: { type: string, description: Required. }
+              required: [clearance_step_name, rejection_remark]
+      responses:
+        "200": { description: Updated Clearance Step as_dict(), status Rejected. }
+
+  /api/method/agency_tracking.clearance_api.reassign_clearance_step:
+    post:
+      tags: [Clearance Steps]
+      summary: Reassign a Clearance Step's ToDo to a different officer
+      description: Manager/Admin only — the escape hatch for the default auto-chain/role-broadcast.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clearance_step_name: { type: string }
+                new_officer: { type: string, description: User email/name. }
+              required: [clearance_step_name, new_officer]
+      responses:
+        "200": { description: "{ clearance_step, assigned_to }" }
+
+  /api/method/agency_tracking.clearance_api.list_my_clearance_steps:
+    get:
+      tags: [Clearance Steps]
+      summary: "My queue — ToDo-assigned rows (Clearance Officer/Ticketer) or every row of my role's step_type (the six country+step roles)"
+      responses:
+        "200": { description: Array of Clearance Step summaries. }
+
+  # --- Portal (Foreign Agency) ---
+  /api/method/agency_tracking.portal_api.list_portal_candidates:
+    get:
+      tags: [Portal (Foreign Agency)]
+      summary: Browse CV-Generated Standard-track candidates in your own country's catalog
+      description: Foreign Agency role only. Non-PII fields only.
+      responses:
+        "200": { description: Array of Applicant summaries (PORTAL_FIELDS only). }
+
+  /api/method/agency_tracking.portal_api.select_candidate:
+    post:
+      tags: [Portal (Foreign Agency)]
+      summary: Select/lock a candidate, creating a Placement
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                applicant_name: { type: string }
+                free_replacement_for_complaint: { type: string, description: Optional — an approved free-replacement Complaint name. }
+              required: [applicant_name]
+      responses:
+        "200": { description: New Placement as_dict(). }
+
+  /api/method/agency_tracking.portal_api.list_my_wakala_requests:
+    get:
+      tags: [Portal (Foreign Agency)]
+      summary: Every unpaid Wakala-bearing Embassy step across your own placements
+      description: New 2026-08-29 — the page the Wakala reminder watchdog (Fri/Sat/Sun, Push + WhatsApp) actually points agencies at.
+      responses:
+        "200": { description: "Array of { name, placement, wakala_amount, wakala_status, status }." }
+
+  # --- CV ---
+  /api/method/agency_tracking.cv_api.generate_cv:
+    post:
+      tags: [CV]
+      summary: Generate + submit a CV Record, move Applicant to CV Generated
+      description: >
+        Standard track only, subject to the Musaned gate. Also renders and attaches the real
+        CV PDF (AS Agency letterhead, applicant's actual data and photo) — mirrored to
+        Cloudflare R2 if configured, else a local private Frappe file. PDF rendering failure
+        never blocks the underlying CV Generated transition (logged, not raised).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { applicant_name: { type: string } }
+              required: [applicant_name]
+      responses:
+        "200": { description: "{ cv_record, applicant_status }" }
+
+  # --- Finance ---
+  /api/method/agency_tracking.finance_api.log_stage_expense:
+    post:
+      tags: [Finance]
+      summary: Log an expense (Pending, needs Finance approval)
+      description: Any internal staff role may log; placement is optional (general office expenses are loggable too). Only Approved entries count toward any ledger/balance total.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount: { type: number }
+                currency: { type: string, enum: [SAR, KWD, USD, ETB, AED, QAR] }
+                description: { type: string }
+                placement: { type: string }
+                stage_logged_at: { type: string }
+                receipt_image: { type: string, description: URL from upload_receipt. }
+              required: [amount, currency, description]
+      responses:
+        "200": { description: New Applicant Transaction as_dict(), status Pending. }
+
+  /api/method/agency_tracking.finance_api.log_stage_income:
+    post:
+      tags: [Finance]
+      summary: Log income (Pending, needs Finance approval)
+      description: Same shape/rules as log_stage_expense.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount: { type: number }
+                currency: { type: string, enum: [SAR, KWD, USD, ETB, AED, QAR] }
+                description: { type: string }
+                placement: { type: string }
+                stage_logged_at: { type: string }
+                receipt_image: { type: string }
+              required: [amount, currency, description]
+      responses:
+        "200": { description: New Applicant Transaction as_dict(), status Pending. }
+
+  /api/method/agency_tracking.finance_api.upload_receipt:
+    post:
+      tags: [Finance]
+      summary: Upload a receipt image to Cloudflare R2
+      description: Pass the returned receipt_image URL into log_stage_expense/log_stage_income.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                applicant_name: { type: string }
+                file_url: { type: string, description: From /api/method/upload_file. }
+              required: [applicant_name, file_url]
+      responses:
+        "200": { description: "{ receipt_image: <R2 URL> }" }
+        "400": { description: Storage Settings not configured yet. }
+
+  /api/method/agency_tracking.finance_api.approve_transaction:
+    post:
+      tags: [Finance]
+      summary: Pending → Approved (Finance Manager/Admin only)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { transaction_name: { type: string } }
+              required: [transaction_name]
+      responses:
+        "200": { description: Updated Applicant Transaction as_dict(). }
+
+  /api/method/agency_tracking.finance_api.reject_transaction:
+    post:
+      tags: [Finance]
+      summary: Pending → Rejected (Finance Manager/Admin only)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                transaction_name: { type: string }
+                rejection_reason: { type: string, description: Required. }
+              required: [transaction_name, rejection_reason]
+      responses:
+        "200": { description: Updated Applicant Transaction as_dict(). }
+
+  /api/method/agency_tracking.finance_api.void_transaction:
+    post:
+      tags: [Finance]
+      summary: Approved → Voided (Finance Manager/Admin only, never a hard delete)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                transaction_name: { type: string }
+                remarks: { type: string, description: Required. }
+              required: [transaction_name, remarks]
+      responses:
+        "200": { description: Updated Applicant Transaction as_dict(). }
+
+  /api/method/agency_tracking.finance_api.trigger_early_commission_accrual:
+    post:
+      tags: [Finance]
+      summary: Manually accrue commission before Departed
+      description: Finance Manager/Admin/Manager only. Idempotency-guarded — a no-op if already accrued, including once naturally accrued on reaching Departed later.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { placement_name: { type: string } }
+              required: [placement_name]
+      responses:
+        "200": { description: New (Approved) Commission Applicant Transaction as_dict(). }
+
+  /api/method/agency_tracking.finance_api.get_fx_rate:
+    get:
+      tags: [Finance]
+      summary: Get the cached FX rate for a currency (Finance Manager/Admin only)
+      parameters:
+        - { name: currency, in: query, required: true, schema: { type: string } }
+        - { name: as_of_date, in: query, schema: { type: string, format: date } }
+      responses:
+        "200": { description: "{ currency, rate_to_birr, rate_date }" }
+
+  /api/method/agency_tracking.finance_api.set_fx_rate:
+    post:
+      tags: [Finance]
+      summary: Manually record an FX rate (Finance Manager/Admin only)
+      description: The only way rates get set when FX Rate Settings.mode is Custom.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                currency: { type: string }
+                rate_to_birr: { type: number }
+                rate_date: { type: string, format: date }
+              required: [currency, rate_to_birr]
+      responses:
+        "200": { description: "{ fx_rate }" }
+
+  /api/method/agency_tracking.finance_api.get_fx_settings:
+    get:
+      tags: [Finance]
+      summary: Get the Global/Custom FX mode + fetch interval
+      responses:
+        "200": { description: "{ mode, fetch_interval, last_fetched_at }" }
+
+  /api/method/agency_tracking.finance_api.set_fx_settings:
+    post:
+      tags: [Finance]
+      summary: Switch FX mode (Global auto-fetch vs Custom manual)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode: { type: string, enum: [Global, Custom] }
+                fetch_interval: { type: string, enum: ["1 Hour", "3 Hours", "6 Hours", Daily] }
+              required: [mode]
+      responses:
+        "200": { description: "{ mode, fetch_interval }" }
+
+  /api/method/agency_tracking.finance_api.get_owed_commissions:
+    get:
+      tags: [Finance]
+      summary: List unbatched Approved commission transactions for a Contractor+country
+      parameters:
+        - { name: contractor, in: query, required: true, schema: { type: string } }
+        - { name: destination_country, in: query, required: true, schema: { type: string } }
+        - { name: order, in: query, schema: { type: string, enum: [oldest, newest], default: oldest } }
+      responses:
+        "200": { description: Array of Applicant Transaction summaries. }
+
+  /api/method/agency_tracking.finance_api.create_commission_batch:
+    post:
+      tags: [Finance]
+      summary: Batch owed commissions into a Commission Batch Request (manual path)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contractor: { type: string }
+                destination_country: { type: string }
+                transaction_names: { type: array, items: { type: string }, description: Optional — defaults to every owed transaction. }
+              required: [contractor, destination_country]
+      responses:
+        "200": { description: New Commission Batch Request as_dict(), status Draft. }
+
+  /api/method/agency_tracking.finance_api.settle_batch:
+    post:
+      tags: [Finance]
+      summary: Settle a whole batch at once (e.g. matched bank statement total)
+      description: Marks every item Paid too, so this and the per-item path never disagree.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                batch_name: { type: string }
+                settlement_reference: { type: string, description: Required. }
+              required: [batch_name, settlement_reference]
+      responses:
+        "200": { description: Updated Commission Batch Request as_dict(), status Settled. }
+
+  /api/method/agency_tracking.finance_api.get_batch_invoice_pdf:
+    get:
+      tags: [Finance]
+      summary: On-demand commission batch invoice PDF (applicant names + amounts)
+      description: Rendered fresh on every call, never pre-generated/stored.
+      parameters:
+        - { name: batch_name, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: PDF bytes. }
+
+  /api/method/agency_tracking.finance_api.upload_batch_payment_proof:
+    post:
+      tags: [Finance]
+      summary: Upload a CSV/PDF of paid applicant names, auto-match against batch items
+      description: Best-effort fuzzy name match. Unmatched names/items are left Pending for manual settle_batch_items review — never blocks.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                batch_name: { type: string }
+                file_url: { type: string }
+              required: [batch_name, file_url]
+      responses:
+        "200": { description: "{ matched_items: [...], unmatched_names: [...] }" }
+
+  /api/method/agency_tracking.finance_api.settle_batch_items:
+    post:
+      tags: [Finance]
+      summary: Manually mark specific Commission Batch Item rows Paid (partial settlement)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                item_names: { type: array, items: { type: string } }
+              required: [item_names]
+      responses:
+        "200": { description: "{ updated_items, affected_batches }" }
+
+  # --- Reconciliation ---
+  /api/method/agency_tracking.reconciliation_api.upload_bank_statement:
+    post:
+      tags: [Reconciliation]
+      summary: Upload a bank statement CSV, auto-match lines to whole Commission Batch Requests
+      description: Finance Manager/Admin only. CSV columns date,reference,amount — a distinct feature from finance_api.upload_batch_payment_proof (which matches per-applicant, not per-statement-line).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { file_url: { type: string } }
+              required: [file_url]
+      responses:
+        "200": { description: New Bank Statement as_dict(), lines auto-matched where unambiguous. }
+
+  /api/method/agency_tracking.reconciliation_api.manually_match_line:
+    post:
+      tags: [Reconciliation]
+      summary: Resolve an ambiguous statement line by hand
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                statement_line_name: { type: string }
+                batch_name: { type: string }
+              required: [statement_line_name, batch_name]
+      responses:
+        "200": { description: Updated Bank Statement Line as_dict(). }
+
+  # --- Complaints ---
+  /api/method/agency_tracking.complaint_api.create_complaint:
+    post:
+      tags: [Complaints]
+      summary: Log a complaint against a placed worker
+      description: Foreign Agency (own placement only) or internal staff.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                placement: { type: string }
+                description: { type: string }
+                worker_status_at_complaint: { type: string, enum: [Deployed, Returned] }
+              required: [placement, description, worker_status_at_complaint]
+      responses:
+        "200": { description: New Complaint as_dict(), status New. }
+
+  /api/method/agency_tracking.complaint_api.list_unresolved_complaints:
+    get:
+      tags: [Complaints]
+      summary: Unresolved complaints, oldest first (Complaint Manager/Admin/Manager)
+      responses:
+        "200": { description: Array of Complaint summaries. }
+
+  /api/method/agency_tracking.complaint_api.acknowledge_complaint:
+    post:
+      tags: [Complaints]
+      summary: New → Unresolved
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { complaint_name: { type: string } }
+              required: [complaint_name]
+      responses:
+        "200": { description: Updated Complaint as_dict(). }
+
+  /api/method/agency_tracking.complaint_api.resolve_complaint:
+    post:
+      tags: [Complaints]
+      summary: Resolve a complaint (Resolved/Returned-Free-Replacement/Escalated/Dismissed)
+      description: Complaint Manager/Admin only, ordinarily. override_reason widens to Manager too (e.g. approving free replacement outside the normal 3-month window). Dismissed requires resolution_notes.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                complaint_name: { type: string }
+                new_status: { type: string, enum: [Resolved, "Returned - Free Replacement Required", Escalated, Dismissed] }
+                resolution_notes: { type: string }
+                override_reason: { type: string }
+              required: [complaint_name, new_status]
+      responses:
+        "200": { description: Updated Complaint as_dict(). }
+
+  # --- Notifications ---
+  /api/method/agency_tracking.notification_api.subscribe_to_push:
+    post:
+      tags: [Notifications]
+      summary: Register the current browser for Web Push
+      description: Always the session user's own subscription — never on behalf of anyone else.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                endpoint: { type: string }
+                p256dh: { type: string }
+                auth: { type: string }
+              required: [endpoint, p256dh, auth]
+      responses:
+        "200": { description: "{ status: subscribed }" }
+
+  /api/method/agency_tracking.notification_api.get_push_subscription_status:
+    get:
+      tags: [Notifications]
+      summary: Does the current user already have an active Push Subscription?
+      description: Drives the frontend's manual "enable notifications" fallback button (for when the browser's own prompt is dismissed/cancelled without the user realizing).
+      responses:
+        "200": { description: "{ subscribed: boolean }" }
+
+  /api/method/agency_tracking.notification_api.trigger_wakala_reminder:
+    post:
+      tags: [Notifications]
+      summary: Manually trigger a Wakala reminder for one Embassy step
+      description: Escape hatch alongside the automatic Fri/Sat/Sun watchdog. Notifies the Contractor's linked User (Push + WhatsApp) — not internal staff.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { clearance_step_name: { type: string } }
+              required: [clearance_step_name]
+      responses:
+        "200": { description: "{ status: reminder sent }" }
+
+  # --- Chat ---
+  /api/method/agency_tracking.chat_api.create_agency_thread:
+    post:
+      tags: [Chat]
+      summary: Get-or-create your agency's one thread with your routed Communication Manager
+      description: Foreign Agency only. No recipient parameter — routing is entirely server-side (per-contractor mapping if configured, else round-robin).
+      responses:
+        "200": { description: Chat Thread as_dict(). }
+
+  /api/method/agency_tracking.chat_api.create_internal_thread:
+    post:
+      tags: [Chat]
+      summary: Get-or-create an internal staff↔staff thread
+      description: Internal staff only, open between any two staff regardless of role.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                other_user: { type: string }
+                context_type: { type: string, enum: [General, Placement, Complaint], default: General }
+                context_reference: { type: string }
+              required: [other_user]
+      responses:
+        "200": { description: Chat Thread as_dict(). }
+
+  /api/method/agency_tracking.chat_api.send_message:
+    post:
+      tags: [Chat]
+      summary: Send a message (text and/or an image/file attachment)
+      description: Must be a participant. A message needs at least a message or an attachment. @mentions independently re-check the sender's own read access to the mentioned record.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                thread_name: { type: string }
+                message: { type: string }
+                attachment: { type: string, description: file_url from /api/method/upload_file. }
+                mentioned_applicant: { type: string }
+                mentioned_placement: { type: string }
+              required: [thread_name]
+      responses:
+        "200": { description: New Chat Message as_dict(). }
+
+  /api/method/agency_tracking.chat_api.list_threads:
+    get:
+      tags: [Chat]
+      summary: My threads, most recently active first
+      description: Agency users get an additional independent filter by their own contractor — structurally cannot see another agency's thread even exists.
+      responses:
+        "200": { description: Array of Chat Thread summaries. }
+
+  /api/method/agency_tracking.chat_api.get_thread_messages:
+    get:
+      tags: [Chat]
+      summary: Full message history for a thread (must be a participant)
+      parameters:
+        - { name: thread_name, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Array of Chat Message summaries, oldest first. }
+
+  /api/method/agency_tracking.chat_api.mark_read:
+    post:
+      tags: [Chat]
+      summary: Mark a thread read (updates my own last_read_at)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { thread_name: { type: string } }
+              required: [thread_name]
+      responses:
+        "200": { description: "{ status: read }" }
+
+  /api/method/agency_tracking.chat_api.add_participant:
+    post:
+      tags: [Chat]
+      summary: Add a participant to an Internal thread
+      description: Internal threads only — Agency threads are permanently locked to exactly 2 participants.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                thread_name: { type: string }
+                user: { type: string }
+              required: [thread_name, user]
+      responses:
+        "200": { description: Updated Chat Thread as_dict(). }
+
+  # --- Reports ---
+  /api/method/agency_tracking.report_api.get_daily_work_report:
+    get:
+      tags: [Reports]
+      summary: CVs created, medicals processed, clearances issued, embassies cleared, tickets booked, departures — for a date range
+      description: Manager/Admin only.
+      parameters:
+        - { name: from_date, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to_date, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        "200": { description: Report object. }
+
+  /api/method/agency_tracking.report_api.get_staff_performance_report:
+    get:
+      tags: [Reports]
+      summary: The same breakdown, per individual staff member
+      parameters:
+        - { name: from_date, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to_date, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        "200": { description: Array of per-user summaries. }
+
+  /api/method/agency_tracking.report_api.get_complaint_aging_report:
+    get:
+      tags: [Reports]
+      summary: New/Unresolved (with age in days, oldest first)/Resolved complaint counts
+      responses:
+        "200": { description: Report object. }
+
+  /api/method/agency_tracking.report_api.get_financial_overview:
+    get:
+      tags: [Reports]
+      summary: Income/expense/commission/refund totals + outstanding/settled — Admin only
+      description: Deliberately not Manager, unlike every other report here.
+      parameters:
+        - { name: from_date, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to_date, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        "200": { description: Report object. }
+
+  /api/method/agency_tracking.report_api.get_pending_approval_queue:
+    get:
+      tags: [Reports]
+      summary: Every Pending Applicant Transaction, oldest first — Admin only
+      description: New 2026-08-29.
+      responses:
+        "200": { description: Array of Applicant Transaction summaries. }
+
+  /api/method/agency_tracking.report_api.get_cost_breakdown_report:
+    get:
+      tags: [Reports]
+      summary: Approved transaction totals by destination_country — Admin only
+      parameters:
+        - { name: from_date, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to_date, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        "200": { description: "{ by_country_birr: { <country>: <total> } }" }
+
+  /api/method/agency_tracking.report_api.get_employee_financial_report:
+    get:
+      tags: [Reports]
+      summary: Per-employee net expense + approval/rejection rate — Admin only
+      parameters:
+        - { name: from_date, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to_date, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        "200": { description: "Array of { user, net_expense_birr, submitted_count, approval_rate }." }
+
+  /api/method/agency_tracking.report_api.get_placement_aging_report:
+    get:
+      tags: [Reports]
+      summary: Placements 25-30 days without a ticket + placements 30+ days not Departed, worst-first
+      description: Manager/Admin. Distinct from the automatic contract_age_watchdog push notification — this is a pull/list view.
+      responses:
+        "200": { description: "{ approaching_ticket_deadline: [...], critical_not_departed: [...] }" }
+
+  # --- Corridor Config ---
+  /api/method/agency_tracking.corridor_engine.get_corridor_steps:
+    get:
+      tags: [Corridor Config]
+      summary: Ordered step definitions for a destination country's corridor
+      description: >
+        Saudi Arabia = LMIS Clearance(1), Taeshir(2, no dependency on LMIS despite the
+        sequence_order), Embassy(3). Kuwait = Kuwait LMIS(1), Telesign(2), Kuwait Embassy(3).
+        Corridors are pure configuration (Corridor Definition doctype) — adding a new
+        destination is a data change, never a code change.
+      parameters:
+        - { name: destination_country, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "Array of { step_type, is_mandatory, sequence_order }." }

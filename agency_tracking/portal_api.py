@@ -129,3 +129,25 @@ def select_candidate(applicant_name, free_replacement_for_complaint=None):
 
 	frappe.db.set_value("Applicant", applicant_name, "active_placement", placement.name)
 	return placement.as_dict()
+
+
+@frappe.whitelist()
+def list_my_wakala_requests():
+	"""New (2026-08-29): a Contractor-scoped list of every unpaid Wakala-bearing Embassy step
+	for their own placements — the page the watchdog/manual reminders (watchdogs.
+	wakala_reminder_watchdog) are actually pointing them at. Mirrors list_my_clearance_steps()'s
+	pattern for the internal-staff side."""
+	contractor = _get_contractor_for_session_user()
+	placement_names = frappe.get_all("Placement", filters={"contractor": contractor.name}, pluck="name")
+	if not placement_names:
+		return []
+	return frappe.get_all(
+		"Clearance Step",
+		filters={
+			"placement": ["in", placement_names],
+			"step_type": "Embassy",
+			"wakala_status": ["!=", "Paid"],
+		},
+		fields=["name", "placement", "wakala_amount", "wakala_status", "status"],
+		ignore_permissions=True,
+	)

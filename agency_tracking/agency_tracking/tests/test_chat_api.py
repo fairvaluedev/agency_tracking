@@ -133,7 +133,7 @@ class TestChatAPI(FrappeTestCase):
 	def test_can_add_participant_to_internal_thread(self):
 		staff_a = make_staff("ca10a")
 		staff_b = make_staff("ca10b", "Clearance Officer")
-		staff_c = make_staff("ca10c", "Ticketing/Dispatch")
+		staff_c = make_staff("ca10c", "Ticketer")
 		frappe.set_user(staff_a.name)
 		thread = create_internal_thread(staff_b.name)
 		add_participant(thread["name"], staff_c.name)
@@ -151,7 +151,7 @@ class TestChatAPI(FrappeTestCase):
 
 		frappe.set_user(staff_a.name)
 		thread = create_internal_thread(staff_b.name)
-		# Recruitment/Intake has no doctype-level read permission on Placement (Part G scope
+		# Registrar has no doctype-level read permission on Placement (Part G scope
 		# stops at Stage 3) — mentioning one should be rejected even though the thread itself
 		# is fine.
 		with self.assertRaises(frappe.PermissionError):

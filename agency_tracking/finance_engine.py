@@ -87,6 +87,27 @@ def fetch_daily_fx_rates():
 		frappe.log_error(title="fetch_daily_fx_rates failed")
 
 
+FX_INTERVAL_HOURS = {"1 Hour": 1, "3 Hours": 3, "6 Hours": 6, "Daily": 24}
+
+
+def maybe_fetch_fx_rates():
+	"""Runs hourly (hooks.py) but only actually calls the API when FX Rate Settings says to.
+	mode="Custom" -> always a no-op, Finance Manager/Admin use set_fx_rate exclusively.
+	mode="Global" -> only fires once the configured fetch_interval has actually elapsed since
+	the last successful fetch (Frappe's cron granularity doesn't support arbitrary intervals
+	directly, so this polls hourly and self-throttles)."""
+	settings = frappe.get_single("FX Rate Settings")
+	if settings.mode != "Global":
+		return
+	interval_hours = FX_INTERVAL_HOURS.get(settings.fetch_interval or "Daily", 24)
+	if settings.last_fetched_at:
+		elapsed_hours = (frappe.utils.now_datetime() - settings.last_fetched_at).total_seconds() / 3600
+		if elapsed_hours < interval_hours:
+			return
+	fetch_daily_fx_rates()
+	frappe.db.set_value("FX Rate Settings", None, "last_fetched_at", frappe.utils.now_datetime())
+
+
 # --- Commission rate resolution (Part D pseudocode, transcribed) ---
 
 
@@ -119,7 +140,7 @@ def get_contractor_default_rate(contractor_name, destination_country):
 # (idempotency-guarded either way)") ---
 
 
-def accrue_commission(placement, actor=None):
+def accrue_commission(placement, from_status=None, actor=None):
 	if placement.is_free_replacement:
 		# Part A.4: "commission fee waived for that one cycle" — already collected on the
 		# original placement this one replaces. Not an idempotency no-op; there was never
@@ -127,7 +148,7 @@ def accrue_commission(placement, actor=None):
 		return None
 	if frappe.db.exists(
 		"Applicant Transaction",
-		{"placement": placement.name, "transaction_type": "Commission", "status": "Active"},
+		{"placement": placement.name, "transaction_type": "Commission", "status": ["!=", "Voided"]},
 	):
 		return None  # idempotency guard — already accrued, early-trigger or Departed alike
 
@@ -145,6 +166,9 @@ def accrue_commission(placement, actor=None):
 			"amount_birr": round(amount * fx_rate, 2),
 			"stage_logged_at": placement.status,
 			"logged_by": actor or frappe.session.user,
+			# System-computed, not a discretionary staff entry -- auto-Approved, skips the
+			# Finance review step that human-logged income/expense entries go through.
+			"status": "Approved",
 		}
 	).insert(ignore_permissions=True)
 
@@ -164,7 +188,7 @@ def _owed_commission_filters(contractor_name, destination_country):
 	return {
 		"placement": ["in", placements or [""]],
 		"transaction_type": "Commission",
-		"status": "Active",
+		"status": "Approved",
 		"commission_batch_request": ["is", "not set"],
 	}
 
@@ -207,17 +231,104 @@ def create_batch_request(contractor_name, destination_country, transaction_names
 
 def settle_batch_request(batch_name, settlement_reference):
 	"""Shared by the manual settle_batch API call and the Step 9 reconciliation matcher — one
-	function both paths converge on, same reasoning as create_batch_request()."""
+	function both paths converge on, same reasoning as create_batch_request(). Whole-batch
+	settlement (e.g. a bank statement line matching the batch's full total) -- marks every
+	item Paid too, so the per-item and whole-batch settlement paths never disagree."""
 	if not settlement_reference:
 		frappe.throw("A settlement reference is required.", frappe.ValidationError)
 	batch = frappe.get_doc("Commission Batch Request", batch_name)
 	if batch.status == "Settled":
 		return batch  # idempotent — a statement line re-matched against an already-settled batch is a no-op
+	for item in batch.items:
+		item.status = "Paid"
 	batch.status = "Settled"
 	batch.settlement_reference = settlement_reference
 	batch.settled_on = today()
 	batch.save(ignore_permissions=True)
 	return batch
+
+
+def _sync_batch_status_from_items(batch):
+	"""Batch-level status follows its items: any Paid but not all -> Partially Settled; all
+	Paid -> Settled (settled_on stamped once, on first reaching that point)."""
+	statuses = [item.status for item in batch.items]
+	if statuses and all(s == "Paid" for s in statuses):
+		batch.status = "Settled"
+		if not batch.settled_on:
+			batch.settled_on = today()
+	elif any(s == "Paid" for s in statuses):
+		batch.status = "Partially Settled"
+	batch.save(ignore_permissions=True)
+
+
+def mark_batch_items_paid(item_names):
+	"""Explicit multi-select manual settlement -- item_names are Commission Batch Item child
+	row names. Groups by parent batch so each affected batch's status gets synced once."""
+	if not item_names:
+		frappe.throw("No items given.", frappe.ValidationError)
+	affected_batches = set()
+	for item_name in item_names:
+		parent = frappe.db.get_value("Commission Batch Item", item_name, "parent")
+		frappe.db.set_value("Commission Batch Item", item_name, "status", "Paid")
+		if parent:
+			affected_batches.add(parent)
+	for batch_name in affected_batches:
+		batch = frappe.get_doc("Commission Batch Request", batch_name)
+		_sync_batch_status_from_items(batch)
+	return {"updated_items": item_names, "affected_batches": list(affected_batches)}
+
+
+def match_batch_payment_proof(batch_name, file_url):
+	"""Agency sends a CSV or PDF listing paid applicant names -- best-effort parse + fuzzy
+	name match against this batch's own item list (via each item's Applicant Transaction ->
+	Placement -> Applicant). Unmatched names are simply skipped (stay Pending for manual
+	settle_batch_items review), same 'never blocks' philosophy as contract_parser.py and the
+	existing bank-statement reconciliation matcher."""
+	from agency_tracking.reconciliation_engine import parse_paid_applicant_names
+
+	paid_names = parse_paid_applicant_names(file_url)
+	batch = frappe.get_doc("Commission Batch Request", batch_name)
+
+	matched_items = []
+	unmatched_names = set(paid_names)
+	for item in batch.items:
+		if item.status == "Paid":
+			continue
+		placement_name = frappe.db.get_value("Applicant Transaction", item.transaction, "placement")
+		if not placement_name:
+			continue
+		applicant_name = frappe.db.get_value("Placement", placement_name, "applicant")
+		full_name = frappe.db.get_value("Applicant", applicant_name, "full_name") or ""
+		match = next((p for p in unmatched_names if p.strip().lower() == full_name.strip().lower()), None)
+		if match:
+			item.status = "Paid"
+			matched_items.append(item.name)
+			unmatched_names.discard(match)
+
+	_sync_batch_status_from_items(batch)
+	return {
+		"matched_items": matched_items,
+		"unmatched_names": list(unmatched_names),
+	}
+
+
+def render_batch_invoice_pdf(batch_name):
+	"""On-demand PDF (applicant names + amounts) via Frappe's standard print/wkhtmltopdf path
+	-- not pre-generated/stored at batch creation, built fresh whenever requested."""
+	batch = frappe.get_doc("Commission Batch Request", batch_name)
+	rows = []
+	for item in batch.items:
+		placement_name = frappe.db.get_value("Applicant Transaction", item.transaction, "placement")
+		applicant_name = frappe.db.get_value("Placement", placement_name, "applicant") if placement_name else None
+		full_name = frappe.db.get_value("Applicant", applicant_name, "full_name") if applicant_name else "—"
+		amount = frappe.db.get_value("Applicant Transaction", item.transaction, "amount_birr")
+		rows.append({"full_name": full_name, "amount_birr": amount, "status": item.status})
+
+	html = frappe.render_template(
+		"agency_tracking/templates/commission_batch_invoice.html",
+		{"batch": batch, "rows": rows, "contractor_name": frappe.db.get_value("Contractor", batch.contractor, "contractor_name")},
+	)
+	return frappe.utils.pdf.get_pdf(html)
 
 
 def _maybe_auto_batch(contractor_name, destination_country):

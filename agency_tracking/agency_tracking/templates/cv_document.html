@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	/* wkhtmltopdf uses an old WebKit build with no flexbox/grid support -- table-based
+	   layout throughout, deliberately, not a stylistic choice. */
+	body { font-family: sans-serif; font-size: 11px; color: #222; }
+	.header-table { width: 100%; border: none; margin-bottom: 10px; border-bottom: 3px solid #0a6ea8; padding-bottom: 8px; }
+	.header-table td { border: none; padding: 0; }
+	.agency-name { font-size: 20px; font-weight: bold; color: #0a6ea8; }
+	.agency-sub { font-size: 12px; color: #555; }
+	/* 2026-08-29: the middle "Al Qurashi" seal from the original template is deliberately
+	   omitted -- it belonged to a different, unrelated recruitment office, not this agency. */
+	table.data { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+	table.data td, table.data th { border: 1px solid #999; padding: 4px 6px; }
+	table.data th { background: #eef6fb; width: 35%; text-align: left; }
+	.photo { width: 140px; height: 180px; border: 1px solid #999; }
+	.top-table { width: 100%; border: none; margin-bottom: 8px; }
+	.top-table td { border: none; padding: 0; vertical-align: top; }
+	.top-table .photo-cell { width: 150px; }
+</style>
+</head>
+<body>
+	<table class="header-table">
+		<tr>
+			<td>
+				<div class="agency-name">AS Agency</div>
+				<div class="agency-sub">Anwar Sultan Kemal — Saudi Arabia</div>
+			</td>
+		</tr>
+	</table>
+
+	<table class="top-table">
+		<tr>
+			<td class="photo-cell">{% if photo_url %}<img class="photo" src="{{ photo_url }}">{% endif %}</td>
+			<td>
+				<table class="data">
+					<tr><th>Job</th><td>{{ applicant.target_job or "" }}</td></tr>
+					<tr><th>Name</th><td>{{ applicant.full_name or "" }}</td></tr>
+					<tr><th>Salary</th><td>{{ applicant.salary_amount or "" }} {{ applicant.salary_currency or "" }}</td></tr>
+				</table>
+			</td>
+		</tr>
+	</table>
+
+	<table class="data">
+		<tr><th colspan="2">Details of Passport</th></tr>
+		<tr><th>Passport No.</th><td>{{ applicant.passport_number or "" }}</td></tr>
+		<tr><th>Issue Date</th><td>{{ applicant.passport_issue_date or "" }}</td></tr>
+		<tr><th>Expiry Date</th><td>{{ applicant.passport_expiry_date or "" }}</td></tr>
+		<tr><th>Place of Issue</th><td>{{ applicant.passport_issue_place or "" }}</td></tr>
+	</table>
+
+	<table class="data">
+		<tr><th colspan="2">Languages</th></tr>
+		<tr><th>English</th><td>{{ applicant.english_level or "" }}</td></tr>
+		<tr><th>Arabic</th><td>{{ applicant.arabic_level or "" }}</td></tr>
+	</table>
+
+	<table class="data">
+		<tr><th colspan="2">Educational Qualification</th></tr>
+		<tr><td colspan="2">{{ applicant.education or "" }}</td></tr>
+	</table>
+
+	<table class="data">
+		<tr><th colspan="2">Details of Applicant</th></tr>
+		<tr><th>Nationality</th><td>{{ applicant.nationality or "" }}</td></tr>
+		<tr><th>Religion</th><td>{{ applicant.religion or "" }}</td></tr>
+		<tr><th>Date of Birth</th><td>{{ applicant.date_of_birth or "" }}</td></tr>
+		<tr><th>Civil Status</th><td>{{ applicant.marital_status or "" }}</td></tr>
+		<tr><th>No. of Children</th><td>{{ applicant.children or "" }}</td></tr>
+		<tr><th>Height</th><td>{{ applicant.height or "" }}</td></tr>
+		<tr><th>Weight</th><td>{{ applicant.weight or "" }}</td></tr>
+		<tr><th>Complexion</th><td>{{ applicant.complexion or "" }}</td></tr>
+	</table>
+
+	<table class="data">
+		<tr><th colspan="2">Skills &amp; Experience</th></tr>
+		<tr><th>Cooking</th><td>{{ "YES" if applicant.skill_cooking else "NO" }}</td></tr>
+		<tr><th>Cleaning</th><td>{{ "YES" if applicant.skill_cleaning else "NO" }}</td></tr>
+		<tr><th>Washing</th><td>{{ "YES" if applicant.skill_washing else "NO" }}</td></tr>
+		<tr><th>Ironing</th><td>{{ "YES" if applicant.skill_ironing else "NO" }}</td></tr>
+		<tr><th>Baby Sitting</th><td>{{ "YES" if applicant.skill_baby_sitting else "NO" }}</td></tr>
+		<tr><th>Children Care</th><td>{{ "YES" if applicant.skill_children_care else "NO" }}</td></tr>
+		<tr><th>Arabic Cooking</th><td>{{ "YES" if applicant.skill_arabic_cooking else "NO" }}</td></tr>
+		<tr><th>Elderly Care</th><td>{{ "YES" if applicant.skill_elderly_care else "NO" }}</td></tr>
+		<tr><th>Sewing</th><td>{{ "YES" if applicant.skill_sewing else "NO" }}</td></tr>
+	</table>
+
+	{% if applicant.remarks %}
+	<table class="data">
+		<tr><th colspan="2">Remarks</th></tr>
+		<tr><td colspan="2">{{ applicant.remarks }}</td></tr>
+	</table>
+	{% endif %}
+</body>
+</html>

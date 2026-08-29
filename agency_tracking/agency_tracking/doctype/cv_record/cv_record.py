@@ -5,8 +5,6 @@ import frappe
 from frappe.model.document import Document
 from frappe.utils import now_datetime
 
-from agency_tracking.state_machine import musaned_gate_passed
-
 
 class CVRecord(Document):
 	def validate(self):
@@ -26,14 +24,7 @@ class CVRecord(Document):
 				frappe.ValidationError,
 			)
 
-		if not musaned_gate_passed(applicant):
-			frappe.throw(
-				f"Musaned gate not passed for {applicant.name}: status is "
-				f"'{applicant.musaned_status}', must be 'ALTEYAZECHEM' before CV generation "
-				"(Saudi-bound Standard candidates only, Part A.2).",
-				frappe.ValidationError,
-			)
-
 	def before_insert(self):
 		self.generated_on = now_datetime()
 		self.generated_by = frappe.session.user
+		self.cycle_number = frappe.db.get_value("Applicant", self.applicant, "cycle_number")

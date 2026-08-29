@@ -29,6 +29,13 @@ def placement_with_lmis_officer(tag):
 	return placement, officer
 
 
+def contractor_user_for(placement):
+	"""2026-08-29: Wakala reminders go to the paying Contractor's user, not the LMIS officer
+	(the previous, wrong recipient) -- see watchdogs.send_wakala_reminder."""
+	contractor_name = frappe.db.get_value("Placement", placement.name, "contractor")
+	return frappe.db.get_value("Contractor", contractor_name, "user")
+
+
 class TestWatchdogs(FrappeTestCase):
 	def test_medical_expiry_notifies_at_each_tier(self):
 		placement, officer = placement_with_lmis_officer("wd01")
@@ -102,35 +109,37 @@ class TestWatchdogs(FrappeTestCase):
 		)
 
 	def test_wakala_reminder_sent_for_unpaid_step(self):
-		# The Saudi corridor already auto-creates an Embassy/Wakala Clearance Step when the
-		# placement enters Processing (Step 7) — Pending/Not-Applicable by default, which
-		# already satisfies the watchdog's "unpaid" filter. No need to (and must not) create a
-		# second one for the same placement, or the watchdog correctly finds two and this
-		# assertion would wrongly look like a bug in the watchdog rather than the fixture.
+		# The Saudi corridor already auto-creates an Embassy Clearance Step when the placement
+		# enters Processing (Step 7) — Pending by default, which already satisfies the
+		# watchdog's "unpaid" filter. No need to (and must not) create a second one for the
+		# same placement, or the watchdog correctly finds two and this assertion would wrongly
+		# look like a bug in the watchdog rather than the fixture.
 		placement, officer = placement_with_lmis_officer("wd06")
+		recipient = contractor_user_for(placement)
 
 		wakala_reminder_watchdog()
 
 		push_count = frappe.db.count(
-			"Comms Log", filters={"recipient": officer.name, "template": "wakala_payment_reminder", "channel": "Push"}
+			"Comms Log", filters={"recipient": recipient, "template": "wakala_payment_reminder", "channel": "Push"}
 		)
 		whatsapp_count = frappe.db.count(
 			"Comms Log",
-			filters={"recipient": officer.name, "template": "wakala_payment_reminder", "channel": "WhatsApp"},
+			filters={"recipient": recipient, "template": "wakala_payment_reminder", "channel": "WhatsApp"},
 		)
 		self.assertEqual(push_count, 1)
 		self.assertEqual(whatsapp_count, 1)
 
 	def test_wakala_reminder_skipped_once_paid(self):
 		placement, officer = placement_with_lmis_officer("wd07")
+		recipient = contractor_user_for(placement)
 		frappe.db.set_value(
 			"Clearance Step",
-			{"placement": placement.name, "step_type": "Embassy/Wakala"},
-			{"status": "Complete", "payment_status": "Paid"},
+			{"placement": placement.name, "step_type": "Embassy"},
+			{"status": "Stamped", "wakala_status": "Paid"},
 		)
 
 		wakala_reminder_watchdog()
 
 		self.assertFalse(
-			frappe.db.exists("Comms Log", {"recipient": officer.name, "template": "wakala_payment_reminder"})
+			frappe.db.exists("Comms Log", {"recipient": recipient, "template": "wakala_payment_reminder"})
 		)

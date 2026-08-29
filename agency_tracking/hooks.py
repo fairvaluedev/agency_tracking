@@ -148,14 +148,19 @@ permission_query_conditions = {
 
 scheduler_events = {
 	"daily": [
-		"agency_tracking.finance_engine.fetch_daily_fx_rates",
 		"agency_tracking.watchdogs.medical_expiry_watchdog",
 		"agency_tracking.watchdogs.contract_age_watchdog",
+		"agency_tracking.watchdogs.taeshir_injaz_reminder_watchdog",
+	],
+	"hourly": [
+		# maybe_fetch_fx_rates checks FX Rate Settings' mode/interval and no-ops unless
+		# actually due (Part 7: Global/Custom FX mode) -- wired in finance_engine.py.
+		"agency_tracking.finance_engine.maybe_fetch_fx_rates",
 	],
 	"cron": {
-		# Twice a week (business-workflow-srs.md: "go out automatically twice a week until
-		# it's paid") — Monday and Thursday mornings.
-		"0 9 * * 1,4": [
+		# 2026-08-29: moved from Mon/Thu to Fri/Sat/Sun -- remind before the Monday
+		# document-submission deadline, not after it's already passed.
+		"0 9 * * 5,6,0": [
 			"agency_tracking.watchdogs.wakala_reminder_watchdog",
 		],
 	},

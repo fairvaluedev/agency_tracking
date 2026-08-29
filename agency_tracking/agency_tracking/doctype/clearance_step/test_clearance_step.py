@@ -57,7 +57,7 @@ class TestClearanceStep(FrappeTestCase):
 		self.assertEqual(len(visible), len(all_steps))
 
 	def test_role_without_any_grant_is_denied_outright(self):
-		# Recruitment/Intake has no read/write permission row on Clearance Step at all (Part G:
+		# Registrar has no read/write permission row on Clearance Step at all (Part G:
 		# their scope is Applicant through Stage 3) — Frappe denies at the base doctype-
 		# permission check, before permission_query_conditions ever runs, so this is a
 		# PermissionError rather than an empty result set.
@@ -70,7 +70,7 @@ class TestClearanceStep(FrappeTestCase):
 				"email": "cs-outsider@example.com",
 				"first_name": "CS Outsider",
 				"send_welcome_email": 0,
-				"roles": [{"role": "Recruitment/Intake"}],
+				"roles": [{"role": "Registrar"}],
 			}
 		).insert(ignore_permissions=True)
 

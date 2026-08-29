@@ -92,7 +92,7 @@ class TestPortalAPI(FrappeTestCase):
 				"email": "not-an-agency@example.com",
 				"first_name": "Not Agency",
 				"send_welcome_email": 0,
-				"roles": [{"role": "Recruitment/Intake"}],
+				"roles": [{"role": "Registrar"}],
 			}
 		).insert(ignore_permissions=True)
 

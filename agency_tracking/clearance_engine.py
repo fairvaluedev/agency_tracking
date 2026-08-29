@@ -44,10 +44,34 @@ def assign_clearance_step(clearance_step_name, user):
 	notify(user, "clearance_step_assigned", {"clearance_step": clearance_step_name})
 
 
-def create_clearance_steps(placement):
+def _broadcast_todo_to_role_holders(clearance_step_name, role):
+	"""2026-08-29: for the six country+step roles, permission is role membership (see
+	clearance_step.py's get_permission_query_conditions), not a single exclusive ToDo
+	assignment -- so every holder gets their own open ToDo purely for the notification/queue
+	UX, none of them "own" the row exclusively the way assign_clearance_step's single-officer
+	model does. The two mechanisms never conflict because ToDo here is notification-only."""
+	for user in frappe.get_all("Has Role", filters={"role": role}, pluck="parent"):
+		frappe.get_doc(
+			{
+				"doctype": "ToDo",
+				"reference_type": "Clearance Step",
+				"reference_name": clearance_step_name,
+				"allocated_to": user,
+				"description": f"Clearance Step {clearance_step_name} ({role})",
+				"status": "Open",
+			}
+		).insert(ignore_permissions=True)
+		notify(user, "clearance_step_assigned", {"clearance_step": clearance_step_name})
+
+
+def create_clearance_steps(placement, from_status=None):
 	"""Placement enters Processing (Part A.2 Stage 5): materialize one Clearance Step per
-	Corridor Step for this destination, in order, auto-assigned per Step Officer Mapping where
-	one's configured."""
+	Corridor Step for this destination, in order. Notification routing: the six country+step
+	roles (see clearance_step.CLEARANCE_ROLE_BY_STEP_TYPE) get a broadcast ToDo to every
+	holder; anything else falls back to the legacy single Step Officer Mapping default_officer
+	if one's configured."""
+	from agency_tracking.agency_tracking.doctype.clearance_step.clearance_step import CLEARANCE_ROLE_BY_STEP_TYPE
+
 	for step in get_corridor_steps(placement.destination_country):
 		clearance_step = frappe.get_doc(
 			{
@@ -59,6 +83,11 @@ def create_clearance_steps(placement):
 				"status": "Pending",
 			}
 		).insert(ignore_permissions=True)
+
+		role = CLEARANCE_ROLE_BY_STEP_TYPE.get(step["step_type"])
+		if role:
+			_broadcast_todo_to_role_holders(clearance_step.name, role)
+			continue
 
 		default_officer = frappe.db.get_value(
 			"Step Officer Mapping", {"step_type": step["step_type"]}, "default_officer"
@@ -107,11 +136,11 @@ def _chain_todo_to_lmis_officer(placement, description):
 	notify(officer, "placement_todo_assigned", {"placement": placement.name, "description": description})
 
 
-def chain_lmis_officer_to_ticketing(placement):
+def chain_lmis_officer_to_ticketing(placement, from_status=None):
 	_chain_todo_to_lmis_officer(placement, f"Book ticket for Placement {placement.name}")
 
 
-def chain_lmis_officer_to_departure(placement):
+def chain_lmis_officer_to_departure(placement, from_status=None):
 	_chain_todo_to_lmis_officer(placement, f"Confirm departure for Placement {placement.name}")
 
 

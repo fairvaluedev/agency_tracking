@@ -55,6 +55,7 @@ def registered_muayena_applicant(tag):
 			"phone": "+251900000000",
 			"address": "Addis Ababa",
 			"national_id": f"NID-CVM-{tag}",
+			"destination_country": "Saudi Arabia",
 			"passport_number": f"EP-CVM-{tag}",
 			"passport_issue_date": "2024-01-01",
 			"passport_expiry_date": "2029-01-01",
@@ -76,19 +77,15 @@ class TestCVRecord(FrappeTestCase):
 		self.assertEqual(result["applicant_status"], "CV Generated")
 		self.assertEqual(frappe.db.get_value("CV Record", result["cv_record"], "docstatus"), 1)
 
-	def test_saudi_standard_blocked_without_alteyazechem(self):
+	def test_saudi_standard_generates_cv_regardless_of_musaned_status(self):
+		# 2026-08-29: the Musaned gate was removed -- CV generation for Saudi-bound Standard
+		# candidates no longer depends on musaned_status at all. The field itself is still
+		# tracked as data, just no longer a blocking gate.
 		applicant = registered_standard_applicant(
 			"t02", destination_country="Saudi Arabia", musaned_status="TEYZALECH"
 		)
-		with self.assertRaises(frappe.ValidationError):
-			generate_cv(applicant.name)
-
-	def test_saudi_standard_blocked_while_musaned_pending(self):
-		applicant = registered_standard_applicant(
-			"t03", destination_country="Saudi Arabia", musaned_status="Pending"
-		)
-		with self.assertRaises(frappe.ValidationError):
-			generate_cv(applicant.name)
+		result = generate_cv(applicant.name)
+		self.assertEqual(result["applicant_status"], "CV Generated")
 
 	def test_saudi_standard_generates_cv_with_alteyazechem(self):
 		applicant = registered_standard_applicant(

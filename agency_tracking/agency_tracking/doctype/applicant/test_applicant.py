@@ -4,7 +4,7 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from agency_tracking.state_machine import musaned_gate_passed, transition
+from agency_tracking.state_machine import transition
 
 def standard_floor(tag):
 	return {
@@ -33,6 +33,7 @@ def standard_floor(tag):
 def muayena_floor(tag):
 	return {
 		"national_id": f"NID-{tag}",
+		"destination_country": "Saudi Arabia",
 		"passport_number": f"EP-MUA-{tag}",
 		"passport_issue_date": "2024-01-01",
 		"passport_expiry_date": "2029-01-01",
@@ -125,19 +126,3 @@ class TestApplicant(FrappeTestCase):
 	def test_multiple_drafts_with_blank_passport_do_not_collide(self):
 		self.make_draft()
 		self.make_draft()
-
-	def test_musaned_gate_blocks_saudi_standard_without_alteyazechem(self):
-		doc = self.make_draft(destination_country="Saudi Arabia", musaned_status="TEYZALECH")
-		self.assertFalse(musaned_gate_passed(doc))
-
-	def test_musaned_gate_passes_saudi_standard_with_alteyazechem(self):
-		doc = self.make_draft(destination_country="Saudi Arabia", musaned_status="ALTEYAZECHEM")
-		self.assertTrue(musaned_gate_passed(doc))
-
-	def test_musaned_gate_not_applicable_to_kuwait(self):
-		doc = self.make_draft(destination_country="Kuwait", musaned_status="TEYZALECH")
-		self.assertTrue(musaned_gate_passed(doc))
-
-	def test_musaned_gate_not_applicable_to_muayena(self):
-		doc = self.make_draft(entry_track="Muayena", destination_country="Saudi Arabia", musaned_status="TEYZALECH")
-		self.assertTrue(musaned_gate_passed(doc))

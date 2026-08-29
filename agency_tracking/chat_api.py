@@ -47,9 +47,11 @@ def create_internal_thread(other_user, context_type="General", context_reference
 
 
 @frappe.whitelist()
-def send_message(thread_name, message, mentioned_applicant=None, mentioned_placement=None):
+def send_message(thread_name, message=None, mentioned_applicant=None, mentioned_placement=None, attachment=None):
 	if not is_participant(frappe.session.user, thread_name):
 		frappe.throw("Not permitted.", frappe.PermissionError)
+	if not (message or attachment):
+		frappe.throw("A message must have text or an attachment.", frappe.ValidationError)
 
 	# addendum: "the mention is a link, not a permission grant" — read access to the mentioned
 	# record still goes through its own permission check, so a mention can't be used to prove
@@ -65,6 +67,7 @@ def send_message(thread_name, message, mentioned_applicant=None, mentioned_place
 			"thread": thread_name,
 			"sender": frappe.session.user,
 			"message": message,
+			"attachment": attachment,
 			"mentioned_applicant": mentioned_applicant,
 			"mentioned_placement": mentioned_placement,
 		}
@@ -108,7 +111,7 @@ def get_thread_messages(thread_name):
 	return frappe.get_all(
 		"Chat Message",
 		filters={"thread": thread_name},
-		fields=["name", "sender", "message", "mentioned_applicant", "mentioned_placement", "creation"],
+		fields=["name", "sender", "message", "attachment", "mentioned_applicant", "mentioned_placement", "creation"],
 		order_by="creation asc",
 	)
 

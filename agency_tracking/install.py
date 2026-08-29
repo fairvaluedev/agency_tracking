@@ -10,33 +10,57 @@ import frappe
 # extends Part G. Added here at Step 12 rather than pre-declared with the rest in Step 1,
 # since it didn't exist in the spec version Step 1 was built against.
 ROLES = [
-	"Recruitment/Intake",
+	"Registrar",
 	"Clearance Officer",
-	"Ticketing/Dispatch",
+	"Ticketer",
 	"Complaint Manager",
 	"Finance Manager",
 	"Manager",
 	"Admin",
 	"Foreign Agency",
 	"Communication Manager",
+	# 2026-08-29 additions: Contract Parser owns getting a contract/visa onto a Placement for
+	# either track. The six country+step roles replace per-row ToDo assignment as the actual
+	# permission gate for Clearance Step (ToDo is kept only for the notification queue) — see
+	# clearance_step.py's get_permission_query_conditions and CLEARANCE_ROLE_BY_STEP_TYPE.
+	"Contract Parser",
+	"Saudi LMIS",
+	"Saudi Taeshir",
+	"Saudi Embassy",
+	"Kuwait LMIS",
+	"Kuwait Telesign",
+	"Kuwait Embassy",
 ]
 
 
 # Part A.3 / business-workflow-srs.md Stage 5: the first two configured corridors, proving the
 # data-driven engine before anything downstream depends on it. Steps are all mandatory for now
 # — the spec doesn't call out an optional step in either corridor yet.
+#
+# 2026-08-29 correction: the original data here was placeholder, attributed to a
+# "business-workflow-srs.md" document that doesn't actually exist anywhere in this repo —
+# unverifiable, not confirmed business fact. Corrected directly against the real process:
+# Saudi = LMIS Clearance + Taeshir run in parallel (both sequence_order 1; Injaz is data
+# captured *inside* the Taeshir Clearance Step, not its own step) -> Embassy (order 2, renamed
+# from "Embassy/Wakala"; Wakala is likewise fields inside Embassy, not its own step). Kuwait =
+# Kuwait LMIS (Police Ashara folded in as fields, renamed from "LMIS Police Clearance") ->
+# Telesign -> Kuwait Embassy ("LMIS Work Permit" dropped entirely, wasn't real).
 CORRIDORS = {
 	"Saudi Arabia": [
+		# LMIS Clearance and Taeshir have no dependency on each other -- both can start
+		# immediately and run independently. sequence_order still must be unique
+		# (Corridor Definition.validate_unique_sequence_orders), so this is display ordering
+		# only, not a hard "must finish 1 before 2" gate -- nothing in the codebase enforces
+		# step-to-step sequencing anyway (all_mandatory_clearance_steps_complete just checks
+		# every mandatory row is done, regardless of order).
 		{"step_type": "LMIS Clearance", "sequence_order": 1, "is_mandatory": 1},
 		{"step_type": "Taeshir", "sequence_order": 2, "is_mandatory": 1},
-		{"step_type": "Injaz", "sequence_order": 3, "is_mandatory": 1},
-		{"step_type": "Embassy/Wakala", "sequence_order": 4, "is_mandatory": 1},
+		{"step_type": "Embassy", "sequence_order": 3, "is_mandatory": 1},
 	],
 	"Kuwait": [
-		{"step_type": "LMIS Police Clearance", "sequence_order": 1, "is_mandatory": 1},
+		{"step_type": "Kuwait LMIS", "sequence_order": 1, "is_mandatory": 1},
 		{"step_type": "Telesign", "sequence_order": 2, "is_mandatory": 1},
 		{"step_type": "Kuwait Embassy", "sequence_order": 3, "is_mandatory": 1},
-		{"step_type": "LMIS Work Permit", "sequence_order": 4, "is_mandatory": 1},
 	],
 }
 
@@ -73,13 +97,20 @@ def create_roles():
 
 
 def create_corridors():
+	"""Upsert, not skip-if-exists — CORRIDORS is the source of truth for what a corridor's
+	steps *should* be, and a stale existing record (e.g. from before the 2026-08-29 step
+	correction) must actually get synced, not silently left wrong forever."""
 	for destination_country, steps in CORRIDORS.items():
-		if frappe.db.exists("Corridor Definition", destination_country):
-			continue
-		frappe.get_doc(
-			{
-				"doctype": "Corridor Definition",
-				"destination_country": destination_country,
-				"steps": steps,
-			}
-		).insert(ignore_permissions=True)
+		existing_name = frappe.db.exists("Corridor Definition", destination_country)
+		if existing_name:
+			doc = frappe.get_doc("Corridor Definition", existing_name)
+			doc.set("steps", steps)
+			doc.save(ignore_permissions=True)
+		else:
+			frappe.get_doc(
+				{
+					"doctype": "Corridor Definition",
+					"destination_country": destination_country,
+					"steps": steps,
+				}
+			).insert(ignore_permissions=True)
