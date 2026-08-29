@@ -28,6 +28,14 @@ class ClearanceStep(Document):
 				frappe.ValidationError,
 			)
 
+	def before_save(self):
+		from agency_tracking.agency_tracking.storage_engine import migrate_attach_to_r2
+
+		applicant_name = frappe.db.get_value("Placement", self.placement, "applicant") if self.placement else None
+		migrate_attach_to_r2(self, "injaz_receipt_photo", "injaz", applicant_name=applicant_name)
+		for payment in self.get("payments") or []:
+			migrate_attach_to_r2(payment, "receipt_url", "finance-receipts", applicant_name=applicant_name)
+
 
 def get_permission_query_conditions(user):
 	"""Part G, extended 2026-08-29: Clearance Officer / Ticketer still see rows only via ToDo

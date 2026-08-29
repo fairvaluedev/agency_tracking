@@ -150,10 +150,10 @@
    "label": "Description/Remark"
   },
   {
-   "description": "Uploaded to Cloudflare R2 (agency/{applicant}/finance-receipts/) — only the resulting URL is stored here, not a local Frappe file.",
+   "description": "Upload here -- automatically moved to Cloudflare R2 (agency/{applicant}/finance-receipts/) on save, this field then holds the R2 URL, not a local Frappe file.",
    "fieldname": "receipt_image",
-   "fieldtype": "Data",
-   "label": "Receipt Image URL"
+   "fieldtype": "Attach",
+   "label": "Receipt"
   },
   {
    "fieldname": "commission_batch_request",

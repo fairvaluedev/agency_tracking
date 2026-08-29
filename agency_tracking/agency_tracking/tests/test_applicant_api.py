@@ -5,6 +5,7 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from agency_tracking.applicant_api import log_applicant_fee, update_applicant_for_lmis
+from agency_tracking.finance_api import approve_transaction
 from agency_tracking.state_machine import transition
 
 
@@ -155,3 +156,49 @@ class TestApplicantAPI(FrappeTestCase):
 		doc.save(ignore_permissions=True)
 		with self.assertRaises(frappe.ValidationError):
 			log_applicant_fee(doc.name)
+
+	def test_fee_log_table_auto_logs_multiple_rows(self):
+		doc = registered_applicant_no_lmis_fields("aa10")
+		doc.append("fee_log", {"description": "Medical exam fee", "transaction_type": "Expense", "amount": 200})
+		doc.append("fee_log", {"description": "Late walk-in surcharge", "transaction_type": "Income", "amount": 50})
+		doc.save(ignore_permissions=True)
+
+		self.assertEqual(len(doc.fee_log), 2)
+		for row in doc.fee_log:
+			self.assertTrue(row.transaction)
+			self.assertEqual(row.status, "Pending")
+		self.assertEqual(
+			frappe.db.count("Applicant Transaction", {"applicant": doc.name, "status": "Pending"}), 2
+		)
+
+	def test_fee_log_row_not_re_logged_on_later_save(self):
+		doc = registered_applicant_no_lmis_fields("aa11")
+		doc.append("fee_log", {"description": "Injaz appointment fee", "transaction_type": "Expense", "amount": 75})
+		doc.save(ignore_permissions=True)
+		first_txn = doc.fee_log[0].transaction
+
+		doc.remarks = "unrelated edit"
+		doc.save(ignore_permissions=True)
+		self.assertEqual(doc.fee_log[0].transaction, first_txn)
+		self.assertEqual(frappe.db.count("Applicant Transaction", {"applicant": doc.name}), 1)
+
+	def test_fee_log_status_reflects_finance_approval(self):
+		doc = registered_applicant_no_lmis_fields("aa12")
+		doc.append("fee_log", {"description": "Wakala reimbursement", "transaction_type": "Income", "amount": 120})
+		doc.save(ignore_permissions=True)
+
+		approve_transaction(doc.fee_log[0].transaction)
+
+		doc.reload()
+		doc.remarks = "trigger a resave to pull the refreshed status"
+		doc.save(ignore_permissions=True)
+		self.assertEqual(doc.fee_log[0].status, "Approved")
+
+	def test_fee_log_row_missing_amount_blocked_by_mandatory_field(self):
+		# description/transaction_type/amount are reqd=1 on Applicant Fee Log -- Frappe itself
+		# blocks an incomplete row before sync_fee_log ever runs, so there's no such thing as
+		# a partially-filled row sitting around as "Not Logged".
+		doc = registered_applicant_no_lmis_fields("aa13")
+		doc.append("fee_log", {"description": "Placeholder, amount not entered yet"})
+		with self.assertRaises(frappe.MandatoryError):
+			doc.save(ignore_permissions=True)

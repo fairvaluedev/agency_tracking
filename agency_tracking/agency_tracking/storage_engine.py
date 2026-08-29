@@ -53,3 +53,35 @@ def upload_to_r2(file_content: bytes, key: str, content_type: str | None = None)
 	client.put_object(Bucket=settings.r2_bucket_name, Key=key, Body=file_content, **extra_args)
 	base = (settings.r2_public_url_base or "").rstrip("/")
 	return f"{base}/{key}"
+
+
+def migrate_attach_to_r2(doc, fieldname, category, applicant_name=None):
+	"""Shared receipt-upload path (2026-08-29) -- same behavior everywhere a receipt/photo is
+	captured: Applicant Transaction.receipt_image, Clearance Step.injaz_receipt_photo,
+	Clearance Step Payment.receipt_url. The field itself stays a normal Frappe Attach (so the
+	browser gets Frappe's native upload widget, nothing custom to build) -- this just runs on
+	save, notices the value is still a *local* Frappe file, uploads it to R2, repoints the
+	field at the resulting public URL, and deletes the local copy so nothing is stored twice.
+
+	Best-effort, like every other document-generation path in this app (contract parsing, FX
+	fetch): if Storage Settings isn't configured yet, or anything else goes wrong, log it and
+	leave the local file in place (still viewable via Frappe's own file serving) rather than
+	blocking the save. Safe to call unconditionally on every save -- a value that's already an
+	R2 URL (doesn't start with /files/ or /private/files/) is a no-op.
+	"""
+	value = doc.get(fieldname)
+	if not value or not (value.startswith("/files/") or value.startswith("/private/files/")):
+		return
+
+	try:
+		file_name = frappe.db.get_value("File", {"file_url": value}, "name")
+		if not file_name:
+			return
+		file_doc = frappe.get_doc("File", file_name)
+		content = file_doc.get_content()
+		key = build_object_key(applicant_name or doc.name, category, file_doc.file_name)
+		r2_url = upload_to_r2(content, key, content_type=file_doc.content_type)
+		doc.set(fieldname, r2_url)
+		frappe.delete_doc("File", file_name, ignore_permissions=True, force=True)
+	except Exception:
+		frappe.log_error(title="R2 receipt migration failed", message=f"{doc.doctype} {doc.name} {fieldname}")

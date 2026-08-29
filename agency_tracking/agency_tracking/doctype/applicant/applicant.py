@@ -79,6 +79,7 @@ class Applicant(Document):
 
 	def before_save(self):
 		self.maybe_log_fee_transaction()
+		self.sync_fee_log()
 
 	def autofill_from_passport(self):
 		"""Auto-parse the passport scan's MRZ on upload and fill in currently-blank fields
@@ -217,3 +218,44 @@ class Applicant(Document):
 		self.fee_transaction = txn.name
 		if not self.fee_payment_date:
 			self.fee_payment_date = frappe.utils.today()
+
+	def sync_fee_log(self):
+		"""Table-based income/expense log (2026-08-29) -- unlike the single Registration Fee
+		above, this allows any number of entries per applicant. Every row without a linked
+		transaction yet gets auto-logged as a Pending Applicant Transaction on this save (no
+		separate button/endpoint needed, same as maybe_log_fee_transaction); every row that
+		already has one gets its Status refreshed from the ledger's current state, so Finance
+		approving/rejecting/voiding on the Applicant Transaction itself is reflected back here
+		without the row itself ever needing another edit."""
+		from agency_tracking.agency_tracking.storage_engine import migrate_attach_to_r2
+		from agency_tracking.finance_engine import get_fx_rate
+
+		for row in self.get("fee_log") or []:
+			migrate_attach_to_r2(row, "receipt_url", "finance-receipts", applicant_name=self.name)
+
+			if row.transaction:
+				row.status = frappe.db.get_value("Applicant Transaction", row.transaction, "status") or row.status
+				continue
+
+			if not (row.description and row.amount):
+				continue
+
+			fx_rate, fx_rate_date = get_fx_rate(row.currency or "ETB")
+			txn = frappe.get_doc(
+				{
+					"doctype": "Applicant Transaction",
+					"applicant": self.name,
+					"placement": self.active_placement or None,
+					"transaction_type": row.transaction_type or "Income",
+					"amount_original": row.amount,
+					"currency_original": row.currency or "ETB",
+					"fx_rate": fx_rate,
+					"fx_rate_date": fx_rate_date,
+					"amount_birr": round(float(row.amount) * fx_rate, 2),
+					"description": row.description,
+					"stage_logged_at": self.status,
+					"logged_by": frappe.session.user,
+				}
+			).insert(ignore_permissions=True)
+			row.transaction = txn.name
+			row.status = "Pending"

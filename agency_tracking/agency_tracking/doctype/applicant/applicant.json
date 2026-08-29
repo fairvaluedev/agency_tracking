@@ -101,6 +101,8 @@
   "fee_status_col",
   "fee_transaction",
   "fee_notes",
+  "fee_log_sec",
+  "fee_log",
   "lifecycle_sec",
   "status",
   "active_placement",
@@ -648,6 +650,19 @@
    "fieldname": "fee_notes",
    "fieldtype": "Small Text",
    "label": "Notes"
+  },
+  {
+   "collapsible": 1,
+   "description": "For anything beyond the single Registration Fee above -- as many income/expense rows as needed. Each row is auto-logged to the Finance ledger as a Pending Applicant Transaction on save, where Finance approves/rejects/voids it; this row's Status mirrors that outcome back.",
+   "fieldname": "fee_log_sec",
+   "fieldtype": "Section Break",
+   "label": "Income / Expense Log"
+  },
+  {
+   "fieldname": "fee_log",
+   "fieldtype": "Table",
+   "label": "Entries",
+   "options": "Applicant Fee Log"
   },
   {
    "fieldname": "lifecycle_sec",

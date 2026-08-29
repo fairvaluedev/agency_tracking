@@ -10,7 +10,8 @@
   "currency",
   "col_break_csp",
   "status",
-  "remark"
+  "remark",
+  "receipt_url"
  ],
  "fields": [
   {
@@ -51,6 +52,12 @@
    "fieldname": "remark",
    "fieldtype": "Small Text",
    "label": "Remark"
+  },
+  {
+   "description": "Upload here -- automatically moved to Cloudflare R2 (agency/{applicant}/finance-receipts/) on save, this field then holds the R2 URL, not a local Frappe file.",
+   "fieldname": "receipt_url",
+   "fieldtype": "Attach",
+   "label": "Receipt"
   }
  ],
  "index_web_pages_for_search": 1,

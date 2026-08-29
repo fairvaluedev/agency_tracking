@@ -14,6 +14,14 @@ class ApplicantTransaction(Document):
 		if self.placement and not self.cycle_number:
 			self.cycle_number = frappe.db.get_value("Placement", self.placement, "cycle_number")
 
+	def before_save(self):
+		from agency_tracking.agency_tracking.storage_engine import migrate_attach_to_r2
+
+		applicant_name = self.applicant or (
+			frappe.db.get_value("Placement", self.placement, "applicant") if self.placement else None
+		)
+		migrate_attach_to_r2(self, "receipt_image", "finance-receipts", applicant_name=applicant_name)
+
 
 def get_permission_query_conditions(user):
 	"""Part D + 2026-08-29: Finance Manager/Admin see every row (the full ledger). Everyone
