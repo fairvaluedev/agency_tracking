@@ -1,28 +1,39 @@
-# Deploying agency_tracking to Railway
+# Deploying Agency Tracking to Railway
 
-Headless Frappe v15 backend, single container (web + worker + scheduler + a local Redis),
-built by the `Dockerfile` right here in this app's own directory. It's self-contained --
-Frappe itself is cloned fresh from GitHub during the build, and this app's source is the
-build context (`docker build .` from inside `apps/agency_tracking/`).
-
-If deploying straight from a monorepo checkout rather than a dedicated `agency_tracking` repository,
-set Railway's service **Root Directory** to `apps/agency_tracking`.
+This directory contains the production Docker configuration for deploying `agency_tracking` (headless Frappe v15 backend) to Railway as a single service.
 
 ---
 
-## 1. Provision a MySQL / MariaDB Service in Railway
+## Architecture Overview
 
-1. In your Railway project, click **+ New** -> **Database** -> **Add MySQL** (or MariaDB).
-2. Connect / link the MySQL database to your `agency_tracking` service.
-   - The container automatically auto-discovers Railway's standard variables (`MYSQLHOST`, `MYSQLPORT`, `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLDATABASE`, or `MYSQL_URL` / `DATABASE_URL`).
+- **Base Image**: `python:3.11-slim-bookworm` with system dependencies (`tesseract-ocr`, `mariadb-client`, `redis-server`, `nodejs`, `yarn`).
+- **Orchestration**: Supervisord managing:
+  1. `gunicorn`: Web server listening on `$PORT` (default 8000).
+  2. `bench worker`: Background task execution (RQ worker).
+  3. `bench schedule`: Cron scheduler for watchdogs (Wakala, Taeshir/Injaz, Medical Expiration).
+  4. `redis-server`: Local cache and queue engine.
+- **Database**: External MySQL / MariaDB (provided via Railway MySQL database plugin).
 
 ---
 
-## 2. Add a Volume Mounted at `/home/frappe/bench/sites`
+## Railway Setup Instructions
 
-> **CRITICAL:** Without a volume, each redeploy looks like a brand-new container with an empty `sites/` directory.
+### 1. Root Directory Setting (If Monorepo)
+If deploying directly from a repo containing multiple apps, set Railway's **Root Directory** setting to:
+```text
+apps/agency_tracking
+```
 
-1. In the `agency_tracking` service settings in Railway, go to the **Volumes** tab.
+### 2. Provision & Link Railway MySQL Database
+1. In your Railway project, click **+ New** -> **Database** -> **Add MySQL**.
+2. Connect / link the MySQL service to the `agency_tracking` service.
+3. Railway automatically injects connection variables (`MYSQLHOST`, `MYSQLPORT`, `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLDATABASE`, or `DATABASE_URL`).
+
+### 3. Add Persistent Volume (CRITICAL)
+> [!IMPORTANT]
+> Railway containers use an ephemeral filesystem. You MUST mount a persistent volume so that `site_config.json`, encryption keys, and uploaded media survive container restarts and redeployments.
+
+1. Go to your `agency_tracking` service settings in Railway -> **Volumes**.
 2. Click **+ Add Volume**.
 3. Set the **Mount Path** to:
    ```text
@@ -31,34 +42,21 @@ set Railway's service **Root Directory** to `apps/agency_tracking`.
 
 ---
 
-## 3. Environment Variables
+## Environment Variables Reference
 
-All database variables are automatically inherited from your linked Railway MySQL service.
-You only need to customize the following if desired:
+All database variables are automatically detected when linked to Railway MySQL. Customize the following as needed:
 
-| Variable | Default / Example | Notes |
+| Variable | Default / Example | Description |
 |---|---|---|
-| `SITE_NAME` | `${{RAILWAY_PUBLIC_DOMAIN}}` or `agency-tracking.local` | Site domain name (HTTP scheme is stripped automatically) |
-| `ADMIN_PASSWORD` | `admin` | Password for the `Administrator` account on first creation |
-| `GUNICORN_WORKERS` | `4` | Number of gunicorn workers |
-| `DB_NAME` | `agency_tracking` | Database name (auto-detected if MySQL service is linked) |
-
-*(Note: `PORT` is automatically injected by Railway).*
+| `SITE_NAME` | `${{RAILWAY_PUBLIC_DOMAIN}}` | Target domain for Frappe site (e.g. `agency-tracking.up.railway.app`) |
+| `ADMIN_PASSWORD` | `admin` | Password assigned to the `Administrator` account on initial site creation |
+| `GUNICORN_WORKERS` | `4` | Number of Gunicorn worker processes |
+| `PORT` | Auto-injected by Railway | HTTP listening port (defaults to 8000 locally) |
 
 ---
 
-## 4. Healthcheck & Deploy Configuration
+## Healthcheck Configuration
 
-In `railway.json`, the healthcheck is configured to:
-- **Path**: `/api/method/frappe.ping` (returns `{"message": "pong"}`)
-- **Timeout**: `300` seconds (allows initial site creation and migrations to finish smoothly)
-
----
-
-## 5. Post-Deploy Configuration (First Boot)
-
-Once the backend is live, configure the following inside Frappe Desk or via API:
-- **Storage Settings** — Cloudflare R2 bucket credentials (for CVs, receipts, Injaz documents).
-- **Notification Config** — VAPID keys (Web Push) and WhatsApp Cloud API credentials.
-- **FX Rate Settings** — Currency exchange rates (ETB defaults 1:1).
-- **Corridor Definitions** — Seeded automatically by `install.py` for Saudi Arabia / Kuwait.
+The service health check is specified in `railway.json`:
+- **Path**: `/api/method/frappe.ping` (Returns `{"message": "pong"}`)
+- **Timeout**: `300` seconds (allows initial site creation and migrations to complete smoothly).

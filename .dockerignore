@@ -1,12 +1,18 @@
-# Build context is this app's own directory (apps/agency_tracking/) -- see the note at the
-# top of the Dockerfile. Keep the context small and don't leak local dev/build artifacts in.
 .git
+.gitignore
 .github
-
+.vscode
+.idea
 __pycache__
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.ruff_cache
+*.log
 node_modules
 frontend/node_modules
 frontend/dist
-
-*.log
+.env
+sites
+logs

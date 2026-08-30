@@ -1,22 +1,22 @@
 #!/bin/bash
-# Runs once on container start, before supervisord takes over the foreground.
+# Startup entrypoint for agency_tracking on Railway
 #
-# IMPORTANT -- persistence: Railway containers are ephemeral. A Volume SHOULD be mounted at
-# $BENCH_PATH/sites (i.e. /home/frappe/bench/sites) so site_config.json (and its encryption_key)
-# persists across redeploys.
+# Persistence note: Railway container instances are ephemeral.
+# A Volume MUST be mounted at $BENCH_PATH/sites (/home/frappe/bench/sites)
+# so site_config.json, encryption keys, and uploaded media survive redeployments.
+
 set -euo pipefail
 
-echo "==> Starting Agency Tracking initialization..."
+echo "==> Initializing Agency Tracking service environment..."
 
 # -----------------------------------------------------------------------------
-# 1. Environment Variable Auto-Discovery & Normalization
+# 1. Database & Environment Auto-Discovery
 # -----------------------------------------------------------------------------
 
-# Parse DATABASE_URL / MYSQL_URL if provided and individual DB vars are missing
+# Parse connection string (DATABASE_URL / MYSQL_URL) if provided
 DATABASE_CONN_URL="${DATABASE_URL:-${MYSQL_URL:-}}"
 if [ -n "$DATABASE_CONN_URL" ] && [ -z "${DB_HOST:-}" ]; then
-  echo "Found database connection URL, parsing parameters..."
-  # Format: mysql://user:pass@host:port/dbname or mariadb://...
+  echo "Parsing database connection URL..."
   PROTO="$(echo "$DATABASE_CONN_URL" | sed -e's,^\(.*://\).*,\1,g')"
   URL_NOPROTO="${DATABASE_CONN_URL#"$PROTO"}"
   USER_PASS="$(echo "$URL_NOPROTO" | grep @ | cut -d@ -f1 || true)"
@@ -36,53 +36,52 @@ if [ -n "$DATABASE_CONN_URL" ] && [ -z "${DB_HOST:-}" ]; then
   fi
 fi
 
-# Auto-detect standard Railway MySQL / MariaDB environment variables
+# Fallback to standard Railway environment variables
 DB_HOST="${DB_HOST:-${MYSQLHOST:-${MARIADB_HOST:-${MYSQL_HOST:-}}}}"
 DB_PORT="${DB_PORT:-${MYSQLPORT:-${MARIADB_PORT:-${MYSQL_PORT:-3306}}}}"
 DB_USER="${DB_USER:-${MYSQLUSER:-${MARIADB_USER:-${MYSQL_USER:-root}}}}"
 DB_PASSWORD="${DB_PASSWORD:-${MYSQLPASSWORD:-${MARIADB_PASSWORD:-${MYSQL_PASSWORD:-${MYSQL_ROOT_PASSWORD:-}}}}}"
 DB_NAME="${DB_NAME:-${MYSQLDATABASE:-${MARIADB_DATABASE:-${MYSQL_DATABASE:-agency_tracking}}}}"
 
-# Auto-detect Site Name from Railway public domain or default
+# Auto-detect public site name or domain
 SITE_NAME="${SITE_NAME:-${RAILWAY_PUBLIC_DOMAIN:-${RAILWAY_STATIC_URL:-agency-tracking.local}}}"
 SITE_NAME="${SITE_NAME#http://}"
 SITE_NAME="${SITE_NAME#https://}"
 SITE_NAME="${SITE_NAME%%/*}"
 
-# Administrator password
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin}"
 
 export PORT="${PORT:-8000}"
 export GUNICORN_WORKERS="${GUNICORN_WORKERS:-4}"
 
-echo "Site Name   : $SITE_NAME"
-echo "Database    : $DB_USER@$DB_HOST:$DB_PORT/$DB_NAME"
-echo "HTTP Port   : $PORT"
-echo "Workers     : $GUNICORN_WORKERS"
+echo "Site Target Domain : $SITE_NAME"
+echo "Database Target    : $DB_USER@$DB_HOST:$DB_PORT/$DB_NAME"
+echo "HTTP Port          : $PORT"
+echo "Gunicorn Workers   : $GUNICORN_WORKERS"
 
 if [ -z "$DB_HOST" ]; then
-  echo "ERROR: DB_HOST (or MYSQLHOST / MYSQL_URL) is not set. Please provision/link a MySQL service in Railway." >&2
+  echo "ERROR: DB_HOST (or MYSQLHOST / DATABASE_URL) is missing. Provision and link a MySQL/MariaDB plugin in Railway." >&2
   exit 1
 fi
 
 cd "$BENCH_PATH"
 
 # -----------------------------------------------------------------------------
-# 2. Volume & Sites Template Restoration
+# 2. Volume Initialization & Seeding
 # -----------------------------------------------------------------------------
 
-# When a volume is mounted at sites/, initialize any missing files from build-time template
+# If sites volume is brand new or empty, restore baseline files from image backup template
 if [ ! -f "sites/apps.txt" ]; then
-  echo "Empty or incomplete sites/ directory detected -- seeding from build-time template..."
+  echo "Seeding baseline sites configuration from image template..."
   cp -a /home/frappe/sites-init/. sites/
 fi
 
-# Guarantee apps.txt contains both frappe and agency_tracking
+# Guarantee agency_tracking is listed in apps.txt
 if ! grep -q "^agency_tracking$" sites/apps.txt 2>/dev/null; then
   echo "agency_tracking" >> sites/apps.txt
 fi
 
-# Restore built assets if missing
+# Restore static assets if missing
 if [ ! -d "sites/assets" ] && [ -d "/home/frappe/sites-init/assets" ]; then
   cp -a /home/frappe/sites-init/assets sites/
 fi
@@ -90,10 +89,10 @@ fi
 chown -R frappe:frappe sites
 
 # -----------------------------------------------------------------------------
-# 3. Wait for Database
+# 3. Database Connectivity Check
 # -----------------------------------------------------------------------------
 
-echo "Waiting for database at ${DB_HOST}:${DB_PORT}..."
+echo "Verifying MariaDB/MySQL connection at ${DB_HOST}:${DB_PORT}..."
 MAX_RETRIES=60
 RETRY_COUNT=0
 until mysqladmin ping -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --silent 2>/dev/null || [ $RETRY_COUNT -eq $MAX_RETRIES ]; do
@@ -102,27 +101,29 @@ until mysqladmin ping -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD"
 done
 
 if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-  echo "ERROR: Could not connect to database at ${DB_HOST}:${DB_PORT} after ${MAX_RETRIES} attempts." >&2
+  echo "ERROR: Unable to reach database server at ${DB_HOST}:${DB_PORT} after ${MAX_RETRIES} attempts." >&2
   exit 1
 fi
-echo "Database is reachable."
+echo "Database server is responsive."
 
 # -----------------------------------------------------------------------------
 # 4. Global Bench Configuration
 # -----------------------------------------------------------------------------
 
-bench set-config -g redis_cache "redis://127.0.0.1:6379"
-bench set-config -g redis_queue "redis://127.0.0.1:6379"
-bench set-config -g redis_socketio "redis://127.0.0.1:6379"
+REDIS_SERVER_URL="${REDIS_URL:-redis://127.0.0.1:6379}"
+
+bench set-config -g redis_cache "$REDIS_SERVER_URL"
+bench set-config -g redis_queue "$REDIS_SERVER_URL"
+bench set-config -g redis_socketio "$REDIS_SERVER_URL"
 bench set-config -g webserver_port "$PORT"
 bench set-config -g serve_default_site true
 
 # -----------------------------------------------------------------------------
-# 5. Site Provisioning or Migration
+# 5. Site Creation or Schema Migration
 # -----------------------------------------------------------------------------
 
 if [ ! -f "sites/${SITE_NAME}/site_config.json" ]; then
-  echo "No existing site_config.json found for ${SITE_NAME} -- creating new site..."
+  echo "No existing site configuration found for ${SITE_NAME}. Creating new Frappe site..."
   bench new-site "$SITE_NAME" \
     --db-type mariadb \
     --db-host "$DB_HOST" \
@@ -137,16 +138,39 @@ if [ ! -f "sites/${SITE_NAME}/site_config.json" ]; then
     --force \
     --set-default
 else
-  echo "Existing site_config.json found for ${SITE_NAME} -- running migrations..."
+  echo "Existing site_config.json found for ${SITE_NAME}. Syncing environment settings and running migrations..."
+  python3 -c "
+import json, os
+p = f'sites/{os.environ.get(\"SITE_NAME\")}/site_config.json'
+try:
+    if os.path.exists(p):
+        with open(p, 'r') as f:
+            data = json.load(f)
+        changed = False
+        if os.environ.get('DB_HOST') and data.get('db_host') != os.environ.get('DB_HOST'):
+            data['db_host'] = os.environ.get('DB_HOST')
+            changed = True
+        if os.environ.get('DB_PORT') and str(data.get('db_port')) != str(os.environ.get('DB_PORT')):
+            data['db_port'] = int(os.environ.get('DB_PORT'))
+            changed = True
+        if os.environ.get('DB_PASSWORD') and data.get('db_password') != os.environ.get('DB_PASSWORD'):
+            data['db_password'] = os.environ.get('DB_PASSWORD')
+            changed = True
+        if changed:
+            with open(p, 'w') as f:
+                json.dump(data, f, indent=1)
+            print('Successfully updated site_config.json with latest DB credentials.')
+except Exception as e:
+    print('Warning: Failed syncing site_config.json:', e)
+"
   bench --site "$SITE_NAME" migrate
   bench use "$SITE_NAME"
 fi
 
-# Ensure permissions on sites directory
 chown -R frappe:frappe sites
 
 # -----------------------------------------------------------------------------
-# 6. Self-heal DB user host scope if needed
+# 6. DB User Host Scope Self-Healing
 # -----------------------------------------------------------------------------
 
 if [ -f "sites/${SITE_NAME}/site_config.json" ]; then
@@ -155,7 +179,7 @@ if [ -f "sites/${SITE_NAME}/site_config.json" ]; then
     STALE_HOSTS=$(mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" -N -B \
       -e "SELECT host FROM mysql.user WHERE user = '${SITE_DB_USER}' AND host != '%';" 2>/dev/null || true)
     if [ -n "$STALE_HOSTS" ]; then
-      echo "Widening ${SITE_DB_USER}@ scope to '%' for container networking..."
+      echo "Widen DB user scope for ${SITE_DB_USER}@'%'..."
       while IFS= read -r stale_host; do
         [ -z "$stale_host" ] && continue
         mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" \
@@ -169,6 +193,5 @@ if [ -f "sites/${SITE_NAME}/site_config.json" ]; then
   fi
 fi
 
-echo "==> Initialization complete. Launching services via supervisord..."
+echo "==> Initialization complete. Starting services under supervisord..."
 exec "$@"
-
