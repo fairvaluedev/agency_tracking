@@ -56,6 +56,7 @@ SITE_NAME="${SITE_NAME%%/*}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin}"
 
 export PORT="${PORT:-8080}"
+export SITES_PATH="/home/frappe/bench/sites"
 export GUNICORN_WORKERS="${GUNICORN_WORKERS:-4}"
 export GUNICORN_BIND_ARGS="--bind 0.0.0.0:${PORT}"
 if [ "$PORT" != "8000" ]; then
