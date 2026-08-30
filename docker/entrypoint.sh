@@ -126,6 +126,19 @@ bench set-config -g serve_default_site true
 # 5. Site Creation or Schema Migration
 # -----------------------------------------------------------------------------
 
+# Check if database contains base Frappe tables
+HAS_BASE_TABLES=false
+if mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" -e "DESCRIBE tabDocType;" >/dev/null 2>&1; then
+  HAS_BASE_TABLES=true
+fi
+
+if [ "${FORCE_NEW_SITE:-0}" = "1" ] || [ "$HAS_BASE_TABLES" = false ]; then
+  if [ -d "sites/${SITE_NAME}" ]; then
+    echo "Database ${DB_NAME} is clean or FORCE_NEW_SITE=1 set. Clearing site folder for fresh installation..."
+    rm -rf "sites/${SITE_NAME}"
+  fi
+fi
+
 if [ ! -f "sites/${SITE_NAME}/site_config.json" ]; then
   echo "No existing site configuration found for ${SITE_NAME}. Creating new Frappe site..."
   bench new-site "$SITE_NAME" \
