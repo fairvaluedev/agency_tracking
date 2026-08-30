@@ -129,7 +129,9 @@ bench set-config -g redis_cache "$REDIS_SERVER_URL"
 bench set-config -g redis_queue "$REDIS_SERVER_URL"
 bench set-config -g redis_socketio "$REDIS_SERVER_URL"
 bench set-config -g webserver_port "$PORT"
+bench set-config -g default_site "$SITE_NAME"
 bench set-config -g serve_default_site true
+echo "$SITE_NAME" > sites/currentsite.txt
 
 # -----------------------------------------------------------------------------
 # 5. Site Creation or Schema Migration
@@ -191,6 +193,12 @@ except Exception as e:
   bench --site "$SITE_NAME" migrate
   bench use "$SITE_NAME"
 fi
+
+# Ensure site is configured as the default site for all incoming requests
+bench set-config -g default_site "$SITE_NAME"
+bench set-config -g serve_default_site true
+bench --site "$SITE_NAME" set-config host_name "https://${SITE_NAME}"
+echo "$SITE_NAME" > sites/currentsite.txt
 
 chown -R frappe:frappe sites
 
