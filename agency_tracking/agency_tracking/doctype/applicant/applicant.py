@@ -3,6 +3,7 @@
 
 import frappe
 from frappe.model.document import Document
+from decimal import Decimal
 
 # Part A.2 / business-workflow-srs.md Stage 1: bare minimum to open a file. Registrar-confirmed
 # floor (2026-08-29): phone/address are NOT required at Draft -- only identity + which track.
@@ -77,7 +78,7 @@ class Applicant(Document):
 		self.validate_field_floor()
 		self.validate_uniqueness()
 
-	def before_save(self):
+	def on_update(self):
 		self.maybe_log_fee_transaction()
 		self.sync_fee_log()
 
@@ -202,11 +203,11 @@ class Applicant(Document):
 				"applicant": self.name,
 				"placement": self.active_placement or None,
 				"transaction_type": self.fee_direction or "Income",
-				"amount_original": self.registration_fee_amount,
+				"amount_original": Decimal(str(self.registration_fee_amount)),
 				"currency_original": self.fee_currency or "ETB",
-				"fx_rate": fx_rate,
+				"fx_rate": Decimal(str(fx_rate)),
 				"fx_rate_date": fx_rate_date,
-				"amount_birr": round(float(self.registration_fee_amount) * fx_rate, 2),
+				"amount_birr": round(Decimal(str(self.registration_fee_amount)) * Decimal(str(fx_rate)), 2),
 				"description": (self.fee_type or "Registration Fee")
 				+ f" for {self.name}"
 				+ (f" -- {self.fee_notes}" if self.fee_notes else ""),
@@ -215,9 +216,9 @@ class Applicant(Document):
 			}
 		).insert(ignore_permissions=True)
 
-		self.fee_transaction = txn.name
+		self.db_set("fee_transaction", txn.name, update_modified=False)
 		if not self.fee_payment_date:
-			self.fee_payment_date = frappe.utils.today()
+			self.db_set("fee_payment_date", frappe.utils.today(), update_modified=False)
 
 	def sync_fee_log(self):
 		"""Table-based income/expense log (2026-08-29) -- unlike the single Registration Fee
@@ -227,14 +228,16 @@ class Applicant(Document):
 		already has one gets its Status refreshed from the ledger's current state, so Finance
 		approving/rejecting/voiding on the Applicant Transaction itself is reflected back here
 		without the row itself ever needing another edit."""
-		from agency_tracking.agency_tracking.storage_engine import migrate_attach_to_r2
+		from agency_tracking.storage_engine import migrate_attach_to_r2
 		from agency_tracking.finance_engine import get_fx_rate
 
 		for row in self.get("fee_log") or []:
 			migrate_attach_to_r2(row, "receipt_url", "finance-receipts", applicant_name=self.name)
 
 			if row.transaction:
-				row.status = frappe.db.get_value("Applicant Transaction", row.transaction, "status") or row.status
+				new_status = frappe.db.get_value("Applicant Transaction", row.transaction, "status")
+				if new_status and new_status != row.status:
+					row.db_set("status", new_status)
 				continue
 
 			if not (row.description and row.amount):
@@ -247,15 +250,15 @@ class Applicant(Document):
 					"applicant": self.name,
 					"placement": self.active_placement or None,
 					"transaction_type": row.transaction_type or "Income",
-					"amount_original": row.amount,
+					"amount_original": Decimal(str(row.amount)),
 					"currency_original": row.currency or "ETB",
-					"fx_rate": fx_rate,
+					"fx_rate": Decimal(str(fx_rate)),
 					"fx_rate_date": fx_rate_date,
-					"amount_birr": round(float(row.amount) * fx_rate, 2),
+					"amount_birr": round(Decimal(str(row.amount)) * Decimal(str(fx_rate)), 2),
 					"description": row.description,
 					"stage_logged_at": self.status,
 					"logged_by": frappe.session.user,
 				}
 			).insert(ignore_permissions=True)
-			row.transaction = txn.name
-			row.status = "Pending"
+			row.db_set("transaction", txn.name)
+			row.db_set("status", "Pending")

@@ -15,7 +15,7 @@ class ApplicantTransaction(Document):
 			self.cycle_number = frappe.db.get_value("Placement", self.placement, "cycle_number")
 
 	def before_save(self):
-		from agency_tracking.agency_tracking.storage_engine import migrate_attach_to_r2
+		from agency_tracking.storage_engine import migrate_attach_to_r2
 
 		applicant_name = self.applicant or (
 			frappe.db.get_value("Placement", self.placement, "applicant") if self.placement else None

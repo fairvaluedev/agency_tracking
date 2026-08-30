@@ -91,6 +91,7 @@ def create_muayena_placement(applicant_name, contractor_name, file_url=None):
 	*can* carry a labeled agency name/license for cross-checking, but auto-assignment isn't
 	attempted at creation time either way; Kuwait's contract never carries one at all.
 	"""
+	lock_applicant_row(applicant_name)
 	applicant = frappe.get_doc("Applicant", applicant_name)
 	if not applicant.has_permission("write"):
 		frappe.throw("Not permitted.", frappe.PermissionError)
@@ -109,8 +110,6 @@ def create_muayena_placement(applicant_name, contractor_name, file_url=None):
 		)
 	if not applicant.destination_country:
 		frappe.throw(f"{applicant_name} has no destination_country set.", frappe.ValidationError)
-
-	lock_applicant_row(applicant_name)
 	current_lock = frappe.db.get_value("Applicant", applicant_name, "active_placement")
 	if current_lock:
 		frappe.throw(f"{applicant_name} already has an active Placement.", frappe.ValidationError)

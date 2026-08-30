@@ -16,6 +16,7 @@ from agency_tracking.finance_engine import (
 )
 from agency_tracking.roles import INTERNAL_STAFF_ROLES
 from agency_tracking.state_machine import transition
+from decimal import Decimal
 
 
 def _log_stage_transaction(transaction_type, amount, currency, description, placement_name, stage_logged_at):
@@ -32,11 +33,11 @@ def _log_stage_transaction(transaction_type, amount, currency, description, plac
 			"doctype": "Applicant Transaction",
 			"placement": placement_name,
 			"transaction_type": transaction_type,
-			"amount_original": amount,
+			"amount_original": Decimal(str(amount)),
 			"currency_original": currency,
-			"fx_rate": fx_rate,
+			"fx_rate": Decimal(str(fx_rate)),
 			"fx_rate_date": fx_rate_date,
-			"amount_birr": round(float(amount) * fx_rate, 2),
+			"amount_birr": round(Decimal(str(amount)) * Decimal(str(fx_rate)), 2),
 			"description": description,
 			"stage_logged_at": stage_logged_at or (placement.status if placement else None),
 			"logged_by": frappe.session.user,

@@ -9,8 +9,10 @@
 # CLAUDE.md's rule is absolute: no doc.status = X; doc.save() anywhere, ever. Only the contents
 # of ALLOWED_TRANSITIONS and STAGE_GATES grow as later build steps add doctypes/stages — the
 # function itself never changes shape. See BUILD_LOG.md "Standing decisions".
+import traceback
 
 import frappe
+from frappe.utils import get_datetime
 
 
 def lock_applicant_row(applicant_name):
@@ -151,9 +153,10 @@ def transition(doc, new_status, actor=None, override=False, override_reason=None
 			# already legitimately happened; only STAGE_GATES may block a transition itself.
 			# Real failures (e.g. commission accrual missing a configured rate) are logged for
 			# staff to notice and resolve manually, not silently lost.
+			frappe.logger().error(f"Transition side effect failed: {doc.doctype} {doc.name}: {current_status} -> {new_status}\n{traceback.format_exc()}")
 			frappe.log_error(
 				title="Transition side effect failed",
-				message=f"{doc.doctype} {doc.name}: {current_status} -> {new_status}",
+				message=f"{doc.doctype} {doc.name}: {current_status} -> {new_status}\n\n{traceback.format_exc()}",
 			)
 
 	return doc
@@ -231,7 +234,9 @@ def within_free_replacement_window(complaint) -> bool:
 	placement = frappe.get_doc("Placement", complaint.placement)
 	if not placement.departed_on:
 		return False
-	days_since_departure = (frappe.utils.now_datetime() - placement.departed_on).days
+	
+	departed_on = get_datetime(placement.departed_on) if isinstance(placement.departed_on, str) else placement.departed_on
+	days_since_departure = (frappe.utils.now_datetime() - departed_on).days
 	return days_since_departure <= FREE_REPLACEMENT_WINDOW_DAYS
 
 

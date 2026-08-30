@@ -25,7 +25,7 @@ def _attach_cv_pdf(cv, applicant, pdf_bytes):
 	local Frappe private file. Either way, cv_pdf_url ends up pointing at something real."""
 	filename = f"{cv.name}.pdf"
 	try:
-		from agency_tracking.agency_tracking.storage_engine import build_object_key, upload_to_r2
+		from agency_tracking.storage_engine import build_object_key, upload_to_r2
 
 		key = build_object_key(applicant.name, "cv", filename)
 		url = upload_to_r2(pdf_bytes, key, content_type="application/pdf")

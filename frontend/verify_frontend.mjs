@@ -35,7 +35,7 @@ async function main() {
   await page.click('button[type=submit]');
   await page.waitForSelector('text=Intake — Register a Candidate', { timeout: 15000 });
   await page.screenshot({ path: `${SCREENSHOT_DIR}/02-intake-form.png` });
-  report('Intake screen shown for Recruitment/Intake user', true);
+  report('Intake screen shown for Registrar user', true);
 
   const tag = Date.now();
 

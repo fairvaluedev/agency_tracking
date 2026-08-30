@@ -13,12 +13,13 @@
 # testable, load-bearing part.
 
 import csv
+from decimal import Decimal, InvalidOperation
 
 import frappe
 
 from agency_tracking.finance_engine import settle_batch_request
 
-AMOUNT_TOLERANCE = 0.01
+AMOUNT_TOLERANCE = Decimal("0.01")
 
 
 def _resolve_frappe_file_path(file_url):
@@ -50,10 +51,10 @@ def parse_bank_statement_csv(file_url):
 					{
 						"statement_date": raw_row["date"].strip(),
 						"reference": (raw_row.get("reference") or "").strip(),
-						"amount": float(raw_row["amount"]),
+						"amount": Decimal(str(raw_row["amount"])),
 					}
 				)
-			except (KeyError, ValueError, AttributeError):
+			except (KeyError, ValueError, AttributeError, InvalidOperation):
 				continue
 	return rows
 
@@ -79,7 +80,7 @@ def match_statement_lines(statement):
 		if line.match_status != "Unmatched":
 			continue
 
-		candidates = [b for b in unsettled_batches if abs(b.total_amount_birr - line.amount) <= AMOUNT_TOLERANCE]
+		candidates = [b for b in unsettled_batches if abs(Decimal(str(b.total_amount_birr)) - Decimal(str(line.amount))) <= AMOUNT_TOLERANCE]
 		if not candidates:
 			continue
 

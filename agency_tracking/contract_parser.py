@@ -5,6 +5,7 @@ import os
 import re
 import unicodedata
 import datetime
+import decimal
 
 import frappe
 from frappe.utils import getdate
@@ -193,8 +194,8 @@ def extract_text_from_pdf(file_path):
 					blocks.append(b[4].strip())
 		if blocks:
 			return "\n".join(blocks)
-	except Exception:
-		pass
+	except Exception as e:
+		frappe.logger().warning(f"PyMuPDF (fitz) extraction failed: {e}")
 
 	# 2. pypdf
 	try:
@@ -207,8 +208,8 @@ def extract_text_from_pdf(file_path):
 				lines.extend(t.splitlines())
 		if lines:
 			return "\n".join(lines)
-	except Exception:
-		pass
+	except Exception as e:
+		frappe.logger().warning(f"pypdf extraction failed: {e}")
 
 	# 3. pdfplumber
 	try:
@@ -221,8 +222,8 @@ def extract_text_from_pdf(file_path):
 					lines.extend(t.splitlines())
 		if lines:
 			return "\n".join(lines)
-	except Exception:
-		pass
+	except Exception as e:
+		frappe.logger().warning(f"pdfplumber extraction failed: {e}")
 
 	return ""
 
@@ -508,7 +509,7 @@ def extract_saudi_fields(text):
 
 	if salary_match:
 		try:
-			data["contract_salary_amount"] = float(salary_match.group(1).replace(",", ""))
+			data["contract_salary_amount"] = decimal.Decimal(salary_match.group(1).replace(",", ""))
 			curr = salary_match.group(2).strip().upper()
 			data["contract_salary_currency"] = "SAR" if "RIYAL" in curr or "SAR" in curr or "ريال" in curr else curr
 		except Exception:
@@ -517,7 +518,7 @@ def extract_saudi_fields(text):
 		sal_val = _search(r"(?:monthly\s*salary|basic\s*salary|الراتب\s*الشهري)\s*[:=\-–]?\s*(\d+)", text)
 		if sal_val:
 			try:
-				data["contract_salary_amount"] = float(sal_val)
+				data["contract_salary_amount"] = decimal.Decimal(sal_val)
 				data["contract_salary_currency"] = "SAR"
 			except Exception:
 				pass
@@ -547,7 +548,7 @@ def extract_kuwait_fields(text):
 	sal_amt = _search(r"Monthly\s*salary\s*:?\s*(\d+)", text) or _search(r"(?:الراتب\s*الشهري|الأجر)\s*[:=\-–]?\s*(\d+)", text)
 	if sal_amt:
 		try:
-			data["contract_salary_amount"] = float(sal_amt)
+			data["contract_salary_amount"] = decimal.Decimal(sal_amt)
 		except Exception:
 			pass
 

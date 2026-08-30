@@ -8,6 +8,7 @@
 
 import frappe
 from frappe.utils import today
+from decimal import Decimal
 
 from agency_tracking.state_machine import TRANSITION_SIDE_EFFECTS
 
@@ -26,7 +27,7 @@ def get_fx_rate(currency, as_of_date=None):
 	hardcoded to 1.0 rather than requiring a Finance Manager to record a meaningless FX Rate
 	row for it."""
 	if currency == "ETB":
-		return 1.0, as_of_date or today()
+		return Decimal("1.0"), as_of_date or today()
 
 	as_of_date = as_of_date or today()
 	exact = frappe.db.get_value(
@@ -91,7 +92,7 @@ def fetch_daily_fx_rates():
 			# API gives ETB-per-1-foreign-unit when queried the other direction; frankfurter's
 			# `from=ETB` gives foreign-per-1-ETB, so invert to get rate_to_birr.
 			if etb_per_unit:
-				record_fx_rate(currency, round(1 / etb_per_unit, 6), data.get("date"))
+				record_fx_rate(currency, round(Decimal("1.0") / Decimal(str(etb_per_unit)), 6), data.get("date"))
 	except Exception:
 		frappe.log_error(title="fetch_daily_fx_rates failed")
 
@@ -168,11 +169,11 @@ def accrue_commission(placement, from_status=None, actor=None):
 			"doctype": "Applicant Transaction",
 			"placement": placement.name,
 			"transaction_type": "Commission",
-			"amount_original": amount,
+			"amount_original": Decimal(str(amount)),
 			"currency_original": currency,
-			"fx_rate": fx_rate,
+			"fx_rate": Decimal(str(fx_rate)),
 			"fx_rate_date": fx_rate_date,
-			"amount_birr": round(amount * fx_rate, 2),
+			"amount_birr": round(Decimal(str(amount)) * Decimal(str(fx_rate)), 2),
 			"stage_logged_at": placement.status,
 			"logged_by": actor or frappe.session.user,
 			# System-computed, not a discretionary staff entry -- auto-Approved, skips the

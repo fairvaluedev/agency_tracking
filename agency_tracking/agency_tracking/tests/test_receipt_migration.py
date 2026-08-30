@@ -43,7 +43,7 @@ class TestReceiptMigration(FrappeTestCase):
 		self.assertTrue(txn.receipt_image.startswith("/files/") or txn.receipt_image.startswith("/private/files/"))
 
 	def test_already_migrated_url_is_left_alone(self):
-		from agency_tracking.agency_tracking.storage_engine import migrate_attach_to_r2
+		from agency_tracking.storage_engine import migrate_attach_to_r2
 
 		txn = frappe.get_doc(
 			{

@@ -94,11 +94,11 @@ def update_applicant(applicant_name, override_ban=False, override_reason=None, *
 	if new_country and new_country != doc.destination_country:
 		_check_country_ban_or_throw(applicant_name, new_country, override_ban, override_reason)
 
+	doc.update(data)
 	if "entry_track" in data and data["entry_track"] != doc.entry_track and doc.status in CYCLE_REGRESSION_STATUSES:
 		transition(doc, "Draft")
-
-	doc.update(data)
-	doc.save()
+	else:
+		doc.save()
 	return doc.as_dict()
 
 

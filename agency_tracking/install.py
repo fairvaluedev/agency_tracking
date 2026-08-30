@@ -104,6 +104,7 @@ def create_corridors():
 		existing_name = frappe.db.exists("Corridor Definition", destination_country)
 		if existing_name:
 			doc = frappe.get_doc("Corridor Definition", existing_name)
+			doc.reload() # Force reload from DB to avoid TimestampMismatchError in tests
 			doc.set("steps", steps)
 			doc.save(ignore_permissions=True)
 		else:

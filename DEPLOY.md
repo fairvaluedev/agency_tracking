@@ -5,57 +5,60 @@ built by the `Dockerfile` right here in this app's own directory. It's self-cont
 Frappe itself is cloned fresh from GitHub during the build, and this app's source is the
 build context (`docker build .` from inside `apps/agency_tracking/`).
 
-If deploying straight from the monorepo (this whole bench checkout) rather than pushing
-`agency_tracking` to its own repo, set Railway's service **Root Directory** to
-`apps/agency_tracking` so it builds from here instead of the bench root.
+If deploying straight from a monorepo checkout rather than a dedicated `agency_tracking` repository,
+set Railway's service **Root Directory** to `apps/agency_tracking`.
 
-## 1. Provision a MySQL/MariaDB plugin in your Railway project
+---
 
-`bench new-site` needs root-level MySQL credentials (to create the site's own dedicated
-database + user under the hood) — Railway's MySQL plugin provides this.
+## 1. Provision a MySQL / MariaDB Service in Railway
 
-## 2. Add a Volume, mounted at `/home/frappe/bench/sites`
+1. In your Railway project, click **+ New** -> **Database** -> **Add MySQL** (or MariaDB).
+2. Connect / link the MySQL database to your `agency_tracking` service.
+   - The container automatically auto-discovers Railway's standard variables (`MYSQLHOST`, `MYSQLPORT`, `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLDATABASE`, or `MYSQL_URL` / `DATABASE_URL`).
 
-**This is not optional.** Railway containers are ephemeral — without a persisted volume here,
-every redeploy looks like a brand-new bench with no `site_config.json`, and the entrypoint
-will try `bench new-site` again against a database that (via Railway's *separately persisted*
-MySQL plugin) may already have that site's tables — the create would fail, and even if it
-somehow didn't, a freshly-generated `encryption_key` would silently break every already-
-encrypted field (Storage Settings' R2 secret, Notification Config's WhatsApp token, etc.),
-since those DB rows stay encrypted under the *old* key. The volume is what keeps
-`site_config.json` (and its `encryption_key`) stable across deploys while the actual data
-lives in Railway's MySQL plugin.
+---
 
-It also holds locally-uploaded files that aren't mirrored to Cloudflare R2.
+## 2. Add a Volume Mounted at `/home/frappe/bench/sites`
 
-## 3. Required environment variables
+> **CRITICAL:** Without a volume, each redeploy looks like a brand-new container with an empty `sites/` directory.
 
-| Variable | Example | Notes |
+1. In the `agency_tracking` service settings in Railway, go to the **Volumes** tab.
+2. Click **+ Add Volume**.
+3. Set the **Mount Path** to:
+   ```text
+   /home/frappe/bench/sites
+   ```
+
+---
+
+## 3. Environment Variables
+
+All database variables are automatically inherited from your linked Railway MySQL service.
+You only need to customize the following if desired:
+
+| Variable | Default / Example | Notes |
 |---|---|---|
-| `SITE_NAME` | `agency-tracking.up.railway.app` | Whatever you want the site to be called |
-| `DB_HOST` | (from the MySQL plugin) | |
-| `DB_PORT` | `3306` | Optional, defaults to 3306 |
-| `DB_NAME` | `agency_tracking` | A *new* database name for bench to create — don't reuse Railway's default plugin database |
-| `DB_USER` | (from the MySQL plugin) | Needs root-level privileges (CREATE DATABASE/USER) |
-| `DB_PASSWORD` | (from the MySQL plugin) | |
-| `ADMIN_PASSWORD` | — | Administrator login, first boot only |
-| `GUNICORN_WORKERS` | `4` | Optional, defaults to 4 |
+| `SITE_NAME` | `${{RAILWAY_PUBLIC_DOMAIN}}` or `agency-tracking.local` | Site domain name (HTTP scheme is stripped automatically) |
+| `ADMIN_PASSWORD` | `admin` | Password for the `Administrator` account on first creation |
+| `GUNICORN_WORKERS` | `4` | Number of gunicorn workers |
+| `DB_NAME` | `agency_tracking` | Database name (auto-detected if MySQL service is linked) |
 
-`PORT` is injected automatically by Railway — don't set it yourself.
+*(Note: `PORT` is automatically injected by Railway).*
 
-## 4. Post-deploy, before this is actually usable
+---
 
-None of these are automatic (same as any fresh agency_tracking install):
-- Storage Settings — Cloudflare R2 bucket + credentials, for receipts/CV PDFs/Injaz papers.
-- Notification Config — VAPID keys (web push) and WhatsApp Cloud API credentials.
-- FX Rate Settings — at least one FX rate recorded (`ETB` doesn't need one, it's hardcoded to
-  1:1 — see `finance_engine.get_fx_rate`) before any non-ETB transaction can be logged.
-- Corridor Definition + Corridor Step records for Saudi Arabia / Kuwait (`install.py` seeds
-  these on a fresh site via the standard fixture/migrate path — verify they landed correctly
-  after the first migrate).
+## 4. Healthcheck & Deploy Configuration
 
-## 5. What's deliberately NOT running
+In `railway.json`, the healthcheck is configured to:
+- **Path**: `/api/method/frappe.ping` (returns `{"message": "pong"}`)
+- **Timeout**: `300` seconds (allows initial site creation and migrations to finish smoothly)
 
-`socketio` — this deployment is headless/API-only; nothing depends on Frappe's realtime
-Desk UI. If a frontend later needs realtime updates, that's a separate container/service to
-add, not a reason to bolt it onto this one.
+---
+
+## 5. Post-Deploy Configuration (First Boot)
+
+Once the backend is live, configure the following inside Frappe Desk or via API:
+- **Storage Settings** — Cloudflare R2 bucket credentials (for CVs, receipts, Injaz documents).
+- **Notification Config** — VAPID keys (Web Push) and WhatsApp Cloud API credentials.
+- **FX Rate Settings** — Currency exchange rates (ETB defaults 1:1).
+- **Corridor Definitions** — Seeded automatically by `install.py` for Saudi Arabia / Kuwait.

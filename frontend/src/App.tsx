@@ -16,7 +16,7 @@ export default function App() {
 
   const isForeignAgency = user.roles.includes('Foreign Agency')
   const isInternalStaff = user.roles.some((r) =>
-    ['Recruitment/Intake', 'Manager', 'Admin', 'System Manager'].includes(r),
+    ['Registrar', 'Manager', 'Admin', 'System Manager'].includes(r),
   )
 
   return (

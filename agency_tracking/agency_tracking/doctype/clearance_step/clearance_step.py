@@ -29,7 +29,7 @@ class ClearanceStep(Document):
 			)
 
 	def before_save(self):
-		from agency_tracking.agency_tracking.storage_engine import migrate_attach_to_r2
+		from agency_tracking.storage_engine import migrate_attach_to_r2
 
 		applicant_name = frappe.db.get_value("Placement", self.placement, "applicant") if self.placement else None
 		migrate_attach_to_r2(self, "injaz_receipt_photo", "injaz", applicant_name=applicant_name)
