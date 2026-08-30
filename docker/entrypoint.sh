@@ -13,8 +13,8 @@ echo "==> Initializing Agency Tracking service environment..."
 # 1. Database & Environment Auto-Discovery
 # -----------------------------------------------------------------------------
 
-# Parse connection string (DATABASE_URL / MYSQL_URL) if provided
-DATABASE_CONN_URL="${DATABASE_URL:-${MYSQL_URL:-}}"
+# Parse connection string (DATABASE_URL / MYSQL_URL / MARIADB_URL) if provided
+DATABASE_CONN_URL="${DATABASE_URL:-${MYSQL_URL:-${MARIADB_URL:-${MYSQL_PRIVATE_URL:-${MARIADB_PRIVATE_URL:-}}}}}"
 if [ -n "$DATABASE_CONN_URL" ] && [ -z "${DB_HOST:-}" ]; then
   echo "Parsing database connection URL..."
   PROTO="$(echo "$DATABASE_CONN_URL" | sed -e's,^\(.*://\).*,\1,g')"
@@ -36,12 +36,12 @@ if [ -n "$DATABASE_CONN_URL" ] && [ -z "${DB_HOST:-}" ]; then
   fi
 fi
 
-# Fallback to standard Railway environment variables
-DB_HOST="${DB_HOST:-${MYSQLHOST:-${MARIADB_HOST:-${MYSQL_HOST:-}}}}"
-DB_PORT="${DB_PORT:-${MYSQLPORT:-${MARIADB_PORT:-${MYSQL_PORT:-3306}}}}"
-DB_USER="${DB_USER:-${MYSQLUSER:-${MARIADB_USER:-${MYSQL_USER:-root}}}}"
-DB_PASSWORD="${DB_PASSWORD:-${MYSQLPASSWORD:-${MARIADB_PASSWORD:-${MYSQL_PASSWORD:-${MYSQL_ROOT_PASSWORD:-}}}}}"
-DB_NAME="${DB_NAME:-${MYSQLDATABASE:-${MARIADB_DATABASE:-${MYSQL_DATABASE:-agency_tracking}}}}"
+# Fallback to standard Railway environment variables (MySQL & MariaDB variants)
+DB_HOST="${DB_HOST:-${MYSQLHOST:-${MARIADBHOST:-${MARIADB_HOST:-${MYSQL_HOST:-}}}}}"
+DB_PORT="${DB_PORT:-${MYSQLPORT:-${MARIADBPORT:-${MARIADB_PORT:-${MYSQL_PORT:-3306}}}}}"
+DB_USER="${DB_USER:-${MYSQLUSER:-${MARIADBUSER:-${MARIADB_USER:-${MYSQL_USER:-root}}}}}"
+DB_PASSWORD="${DB_PASSWORD:-${MYSQLPASSWORD:-${MARIADBPASSWORD:-${MARIADB_PASSWORD:-${MYSQL_PASSWORD:-${MYSQL_ROOT_PASSWORD:-${MARIADB_ROOT_PASSWORD:-}}}}}}}"
+DB_NAME="${DB_NAME:-${MYSQLDATABASE:-${MARIADBDATABASE:-${MARIADB_DATABASE:-${MYSQL_DATABASE:-agency_tracking}}}}}"
 
 # Auto-detect public site name or domain
 SITE_NAME="${SITE_NAME:-${RAILWAY_PUBLIC_DOMAIN:-${RAILWAY_STATIC_URL:-agency-tracking.local}}}"
