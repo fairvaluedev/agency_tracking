@@ -13,6 +13,12 @@
 set -euo pipefail
 
 : "${SITE_NAME:?SITE_NAME env var is required, e.g. agency-tracking.railway.internal}"
+# Frappe site names are a bare hostname -- strip an accidentally-pasted URL scheme (a very
+# easy mistake when copying the value straight out of Railway's own public-domain field)
+# rather than crash-looping on it.
+SITE_NAME="${SITE_NAME#http://}"
+SITE_NAME="${SITE_NAME#https://}"
+SITE_NAME="${SITE_NAME%%/*}"
 : "${DB_HOST:?DB_HOST env var is required - point this at the MySQL/MariaDB plugin}"
 : "${DB_PORT:=3306}"
 : "${DB_NAME:?DB_NAME env var is required}"
