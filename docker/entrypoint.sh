@@ -43,6 +43,14 @@ if [ ! -f "sites/apps.txt" ]; then
   cp -rn /home/frappe/sites-init/. sites/
 fi
 
+# This whole script runs as root (needed to write into a freshly-mounted, root-owned Railway
+# Volume at all -- see the note above). `bench` itself auto-drops from root to whatever
+# common_site_config.json's frappe_user says (set to "frappe" during the image's build-time
+# `bench init`, since that ran as the frappe user) for every command below -- but that only
+# works if the files it's dropping privileges *to write* are actually owned by that user.
+# The `cp` above (plain shell, not routed through bench) just created everything as root.
+chown -R frappe:frappe sites
+
 echo "Waiting for MariaDB at ${DB_HOST}:${DB_PORT}..."
 until mysqladmin ping -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --silent 2>/dev/null; do
   sleep 2

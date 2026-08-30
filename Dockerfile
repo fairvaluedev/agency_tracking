@@ -71,7 +71,11 @@ COPY docker/supervisord.conf /etc/supervisor/supervisord.conf
 RUN chmod +x /entrypoint.sh \
     && mkdir -p /var/log/supervisor && chown frappe:frappe /var/log/supervisor
 
-USER frappe
+# Container starts as root -- Railway's volume bind-mount at sites/ is root-owned on first
+# attach, and the frappe user has no permission to write into it (let alone seed it or run
+# bench new-site). entrypoint.sh fixes ownership and then drops to frappe itself (supervisord
+# is configured with user=frappe, so every service it spawns runs unprivileged) -- root only
+# does the one-time filesystem/DB setup, nothing long-running stays root.
 EXPOSE 8000
 
 ENTRYPOINT ["/entrypoint.sh"]
