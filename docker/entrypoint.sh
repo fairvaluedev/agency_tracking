@@ -57,6 +57,37 @@ until mysqladmin ping -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD"
 done
 echo "MariaDB is up."
 
+# Self-heal the site's DB user host-scope on EVERY boot, unconditionally -- don't just rely
+# on --mariadb-user-host-login-scope being right the one time new-site ran. Railway containers
+# get a new internal IP on every redeploy; if this site's user was ever created (by this
+# script before this fix existed, by a manual bench new-site, by literally anything) without
+# a wildcard host, it silently breaks on the next redeploy with "Access denied" -- and no
+# amount of resetting volumes/DB names fixes that, since it's a row in MariaDB's own mysql.user
+# table, not anything living in the site's own files. Fix the actual row instead.
+if [ -f "sites/${SITE_NAME}/site_config.json" ]; then
+  SITE_DB_USER=$(python3 -c "import json; print(json.load(open('sites/${SITE_NAME}/site_config.json')).get('db_name', ''))")
+  if [ -n "$SITE_DB_USER" ]; then
+    STALE_HOSTS=$(mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" -N -B \
+      -e "SELECT host FROM mysql.user WHERE user = '${SITE_DB_USER}' AND host != '%';" 2>/dev/null || true)
+    if [ -n "$STALE_HOSTS" ]; then
+      echo "Found ${SITE_DB_USER}@ scoped to a non-wildcard host -- widening to '%' so redeploys with a new container IP don't break auth again."
+      while IFS= read -r stale_host; do
+        [ -z "$stale_host" ] && continue
+        # RENAME USER preserves the existing password as-is, just widens which host it's
+        # allowed to connect from. If a '%' entry already exists (e.g. a previous boot
+        # partially applied this fix), the rename fails harmlessly -- ignore and move on,
+        # then drop the now-redundant stale-host row so it doesn't linger forever.
+        if ! mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" \
+             -e "RENAME USER '${SITE_DB_USER}'@'${stale_host}' TO '${SITE_DB_USER}'@'%';" 2>/dev/null; then
+          mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" \
+            -e "DROP USER IF EXISTS '${SITE_DB_USER}'@'${stale_host}';" 2>/dev/null || true
+        fi
+      done <<< "$STALE_HOSTS"
+      mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" -e "GRANT ALL PRIVILEGES ON \`${SITE_DB_USER}\`.* TO '${SITE_DB_USER}'@'%'; FLUSH PRIVILEGES;" 2>/dev/null || true
+    fi
+  fi
+fi
+
 # common_site_config.json: local Redis (started by supervisord alongside this entrypoint),
 # and Railway's dynamically-assigned $PORT for the webserver.
 bench set-config -g redis_cache "redis://127.0.0.1:6379"
