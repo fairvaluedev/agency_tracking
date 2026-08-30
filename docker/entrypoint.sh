@@ -107,8 +107,12 @@ fi
 echo "Database server is responsive."
 
 # -----------------------------------------------------------------------------
-# 4. Global Bench Configuration
+# 4. Start Temporary Redis Daemon for Initialization
 # -----------------------------------------------------------------------------
+
+echo "Starting temporary Redis daemon for site initialization..."
+redis-server --daemonize yes --port 6379 --save ""
+sleep 1
 
 REDIS_SERVER_URL="${REDIS_URL:-redis://127.0.0.1:6379}"
 
@@ -193,5 +197,11 @@ if [ -f "sites/${SITE_NAME}/site_config.json" ]; then
   fi
 fi
 
+# Stop temporary Redis before supervisord process manager takes over
+echo "Stopping temporary initialization Redis..."
+redis-cli shutdown 2>/dev/null || true
+sleep 1
+
 echo "==> Initialization complete. Starting services under supervisord..."
 exec "$@"
+
