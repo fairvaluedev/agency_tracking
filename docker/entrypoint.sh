@@ -43,6 +43,10 @@ DB_USER="${DB_USER:-${MYSQLUSER:-${MARIADBUSER:-${MARIADB_USER:-${MYSQL_USER:-ro
 DB_PASSWORD="${DB_PASSWORD:-${MYSQLPASSWORD:-${MARIADBPASSWORD:-${MARIADB_PASSWORD:-${MYSQL_PASSWORD:-${MYSQL_ROOT_PASSWORD:-${MARIADB_ROOT_PASSWORD:-}}}}}}}"
 DB_NAME="${DB_NAME:-${MYSQLDATABASE:-${MARIADBDATABASE:-${MARIADB_DATABASE:-${MYSQL_DATABASE:-agency_tracking}}}}}"
 
+# Root DBA credentials for bench new-site (creating databases & granting privileges)
+DB_ROOT_USER="${DB_ROOT_USER:-${MYSQLROOTUSER:-${MARIADBROOTUSER:-${MYSQL_ROOT_USER:-${MARIADB_ROOT_USER:-root}}}}}"
+DB_ROOT_PASSWORD="${DB_ROOT_PASSWORD:-${MYSQLROOTPASSWORD:-${MARIADBROOTPASSWORD:-${MYSQL_ROOT_PASSWORD:-${MARIADB_ROOT_PASSWORD:-${DB_PASSWORD:-}}}}}}"
+
 # Auto-detect public site name or domain
 SITE_NAME="${SITE_NAME:-${RAILWAY_PUBLIC_DOMAIN:-${RAILWAY_STATIC_URL:-agency-tracking.local}}}"
 SITE_NAME="${SITE_NAME#http://}"
@@ -55,7 +59,7 @@ export PORT="${PORT:-8000}"
 export GUNICORN_WORKERS="${GUNICORN_WORKERS:-4}"
 
 echo "Site Target Domain : $SITE_NAME"
-echo "Database Target    : $DB_USER@$DB_HOST:$DB_PORT/$DB_NAME"
+echo "Database Target    : $DB_USER@$DB_HOST:$DB_PORT/$DB_NAME (Root: $DB_ROOT_USER)"
 echo "HTTP Port          : $PORT"
 echo "Gunicorn Workers   : $GUNICORN_WORKERS"
 
@@ -146,11 +150,10 @@ if [ ! -f "sites/${SITE_NAME}/site_config.json" ]; then
     --db-host "$DB_HOST" \
     --db-port "$DB_PORT" \
     --db-name "$DB_NAME" \
-    --db-root-username "$DB_USER" \
-    --db-root-password "$DB_PASSWORD" \
+    --db-root-username "$DB_ROOT_USER" \
+    --db-root-password "$DB_ROOT_PASSWORD" \
     --admin-password "$ADMIN_PASSWORD" \
     --mariadb-user-host-login-scope '%' \
-    --no-mariadb-socket \
     --install-app agency_tracking \
     --force \
     --set-default
