@@ -51,6 +51,10 @@ bench set-config -g serve_default_site true
 if [ ! -f "sites/${SITE_NAME}/site_config.json" ]; then
   echo "No existing site_config.json for ${SITE_NAME} -- creating a new site."
   echo "(If this is meant to be a redeploy of an existing site, the sites/ Volume isn't mounted correctly.)"
+  # --mariadb-user-host-login-scope '%': without this, DbManager.create_user() (frappe/
+  # database/db_manager.py) scopes the new site DB user to whatever IP the container happens
+  # to have *at this exact moment* -- Railway containers get a fresh internal IP on every
+  # redeploy, so the very next boot would get "Access denied" against its own site's database.
   bench new-site "$SITE_NAME" \
     --db-type mariadb \
     --db-host "$DB_HOST" \
@@ -59,6 +63,7 @@ if [ ! -f "sites/${SITE_NAME}/site_config.json" ]; then
     --db-root-username "$DB_USER" \
     --db-root-password "$DB_PASSWORD" \
     --admin-password "$ADMIN_PASSWORD" \
+    --mariadb-user-host-login-scope '%' \
     --no-mariadb-socket \
     --install-app agency_tracking \
     --set-default
