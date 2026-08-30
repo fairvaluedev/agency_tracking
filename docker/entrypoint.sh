@@ -34,6 +34,15 @@ export GUNICORN_WORKERS="${GUNICORN_WORKERS:-4}"
 
 cd "$BENCH_PATH"
 
+# A Railway Volume mounted at sites/ shadows everything the image baked in there at build
+# time (apps.txt, common_site_config.json, built frontend assets) with the volume's own --
+# empty, on first attach -- content. Restore from the build-time backup before doing
+# anything else, or every bench/frappe command below fails with "apps.txt Not Found".
+if [ ! -f "sites/apps.txt" ]; then
+  echo "Empty sites/ volume detected -- seeding it from the image's build-time bench init."
+  cp -rn /home/frappe/sites-init/. sites/
+fi
+
 echo "Waiting for MariaDB at ${DB_HOST}:${DB_PORT}..."
 until mysqladmin ping -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --silent 2>/dev/null; do
   sleep 2

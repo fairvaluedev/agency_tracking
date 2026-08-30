@@ -56,6 +56,14 @@ RUN ./env/bin/pip install --no-cache-dir -e apps/agency_tracking \
 # --- Frontend assets (agency_tracking's own bundled React SPA + Frappe's desk assets) -------
 RUN bench build --app agency_tracking
 
+# --- Preserve the fully-initialized sites/ (apps.txt, common_site_config.json, built assets)
+# outside the mount path. A Railway Volume mounted at $BENCH_PATH/sites (required for
+# site_config.json/encryption_key to survive redeploys, see entrypoint.sh) *replaces* whatever
+# was baked into the image at that path with the volume's own -- empty, on first attach --
+# content, silently deleting apps.txt and everything else built above. entrypoint.sh restores
+# from this backup into the empty volume on first boot.
+RUN cp -r sites /home/frappe/sites-init
+
 # --- Runtime plumbing ---------------------------------------------------------
 USER root
 COPY --chown=frappe:frappe docker/entrypoint.sh /entrypoint.sh
