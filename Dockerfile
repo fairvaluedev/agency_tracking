@@ -46,8 +46,12 @@ WORKDIR ${BENCH_PATH}
 # The build context root *is* this app's source (see the note at the top of this file) --
 # copied wholesale into the bench's apps/ directory, same place `bench get-app` would put it.
 COPY --chown=frappe:frappe . apps/agency_tracking
+# `bench init`'s freshly-generated sites/apps.txt has no trailing newline after "frappe" --
+# a bare `echo ... >> apps.txt` glues straight onto that line, producing a single malformed
+# entry ("frappeagency_tracking") that then fails to import. printf guarantees the leading
+# newline that separates them.
 RUN ./env/bin/pip install --no-cache-dir -e apps/agency_tracking \
-    && echo "agency_tracking" >> sites/apps.txt
+    && printf '\n%s\n' agency_tracking >> sites/apps.txt
 
 # --- Frontend assets (agency_tracking's own bundled React SPA + Frappe's desk assets) -------
 RUN bench build --app agency_tracking
