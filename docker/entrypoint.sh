@@ -91,9 +91,11 @@ if ! grep -q "^agency_tracking$" sites/apps.txt 2>/dev/null; then
   echo "agency_tracking" >> sites/apps.txt
 fi
 
-# Restore static assets if missing
-if [ ! -d "sites/assets" ] && [ -d "/home/frappe/sites-init/assets" ]; then
-  cp -a /home/frappe/sites-init/assets sites/
+# Always sync static assets from build-time image into volume
+mkdir -p sites/assets
+if [ -d "/home/frappe/sites-init/assets" ]; then
+  echo "Syncing latest built assets into sites/assets..."
+  cp -a /home/frappe/sites-init/assets/. sites/assets/
 fi
 
 chown -R frappe:frappe sites
