@@ -66,7 +66,8 @@ RUN chmod +x /entrypoint.sh \
     && mkdir -p /var/log/supervisor \
     && chown -R frappe:frappe /var/log/supervisor /entrypoint.sh
 
-EXPOSE 8000
+EXPOSE 8080 8000
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]
+

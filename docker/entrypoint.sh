@@ -55,13 +55,18 @@ SITE_NAME="${SITE_NAME%%/*}"
 
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin}"
 
-export PORT="${PORT:-8000}"
+export PORT="${PORT:-8080}"
 export GUNICORN_WORKERS="${GUNICORN_WORKERS:-4}"
+export GUNICORN_BIND_ARGS="--bind 0.0.0.0:${PORT}"
+if [ "$PORT" != "8000" ]; then
+  export GUNICORN_BIND_ARGS="${GUNICORN_BIND_ARGS} --bind 0.0.0.0:8000"
+fi
 
 echo "Site Target Domain : $SITE_NAME"
 echo "Database Target    : $DB_USER@$DB_HOST:$DB_PORT/$DB_NAME (Root: $DB_ROOT_USER)"
 echo "HTTP Port          : $PORT"
 echo "Gunicorn Workers   : $GUNICORN_WORKERS"
+echo "Gunicorn Bind Args : $GUNICORN_BIND_ARGS"
 
 if [ -z "$DB_HOST" ]; then
   echo "ERROR: DB_HOST (or MYSQLHOST / DATABASE_URL) is missing. Provision and link a MySQL/MariaDB plugin in Railway." >&2
