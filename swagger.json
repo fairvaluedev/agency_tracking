@@ -157,7 +157,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ApplicantDoc"
                 }
               }
             }
@@ -235,7 +235,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ApplicantDoc"
                 }
               }
             }
@@ -283,7 +283,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ApplicantDoc"
                 }
               }
             }
@@ -409,7 +409,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ApplicantCountryBanDoc"
                 }
               }
             }
@@ -508,7 +508,12 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -553,7 +558,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ApplicantDoc"
                 }
               }
             }
@@ -601,7 +606,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ApplicantDoc"
                 }
               }
             }
@@ -659,7 +664,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ApplicantDoc"
                 }
               }
             }
@@ -723,7 +728,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ApplicantDoc"
                 }
               }
             }
@@ -822,7 +827,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ApplicantDoc"
                 }
               }
             }
@@ -956,9 +961,15 @@
                   "items": {
                     "type": "object",
                     "properties": {
-                      "step_type": { "type": "string" },
-                      "user": { "type": "string" },
-                      "full_name": { "type": "string" }
+                      "step_type": {
+                        "type": "string"
+                      },
+                      "user": {
+                        "type": "string"
+                      },
+                      "full_name": {
+                        "type": "string"
+                      }
                     }
                   }
                 }
@@ -1012,7 +1023,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ChatThreadDoc"
                 }
               }
             }
@@ -1053,7 +1064,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ChatThreadDoc"
                 }
               }
             }
@@ -1115,7 +1126,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ChatThreadDoc"
                 }
               }
             }
@@ -1163,7 +1174,37 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "sender": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "attachment": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "mentioned_applicant": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "mentioned_placement": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "creation": {
+                        "type": "string"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -1204,7 +1245,29 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "thread_type": {
+                        "type": "string"
+                      },
+                      "context_type": {
+                        "type": "string"
+                      },
+                      "context_reference": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "last_message_at": {
+                        "type": "string",
+                        "nullable": true
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -1252,7 +1315,12 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -1325,7 +1393,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ChatMessageDoc"
                 }
               }
             }
@@ -1387,7 +1455,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ClearanceStepDoc"
                 }
               }
             }
@@ -1428,7 +1496,30 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "placement": {
+                        "type": "string"
+                      },
+                      "step_type": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "sequence_order": {
+                        "type": "integer"
+                      },
+                      "is_mandatory": {
+                        "type": "integer"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -1484,7 +1575,15 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "clearance_step": {
+                      "type": "string"
+                    },
+                    "assigned_to": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -1540,7 +1639,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ClearanceStepDoc"
                 }
               }
             }
@@ -1596,7 +1695,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ClearanceStepDoc"
                 }
               }
             }
@@ -1646,7 +1745,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ClearanceStepDoc"
                 }
               }
             }
@@ -1696,7 +1795,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ClearanceStepDoc"
                 }
               }
             }
@@ -1745,7 +1844,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ComplaintDoc"
                 }
               }
             }
@@ -1806,7 +1905,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ComplaintDoc"
                 }
               }
             }
@@ -1849,7 +1948,27 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "placement": {
+                        "type": "string"
+                      },
+                      "contractor": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      },
+                      "creation": {
+                        "type": "string"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -1923,7 +2042,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ComplaintDoc"
                 }
               }
             }
@@ -2125,7 +2244,21 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "step_type": {
+                        "type": "string"
+                      },
+                      "is_mandatory": {
+                        "type": "integer"
+                      },
+                      "sequence_order": {
+                        "type": "integer"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -2173,7 +2306,15 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "cv_record": {
+                      "type": "string"
+                    },
+                    "applicant_status": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -2222,7 +2363,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ApplicantTransactionDoc"
                 }
               }
             }
@@ -2284,7 +2425,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/CommissionBatchRequestDoc"
                 }
               }
             }
@@ -2347,7 +2488,18 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "currency": {
+                      "type": "string"
+                    },
+                    "rate_to_birr": {
+                      "type": "number"
+                    },
+                    "rate_date": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -2413,7 +2565,30 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "placement": {
+                        "type": "string"
+                      },
+                      "amount_original": {
+                        "type": "number"
+                      },
+                      "currency_original": {
+                        "type": "string"
+                      },
+                      "amount_birr": {
+                        "type": "number"
+                      },
+                      "creation": {
+                        "type": "string"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -2493,7 +2668,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ApplicantTransactionDoc"
                 }
               }
             }
@@ -2573,7 +2748,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ApplicantTransactionDoc"
                 }
               }
             }
@@ -2628,7 +2803,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ApplicantTransactionDoc"
                 }
               }
             }
@@ -2696,7 +2871,13 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "fx_rate": {
+                      "type": "string",
+                      "description": "The new FX Rate record's name (a hash), NOT the rate value -- call get_fx_rate to read the value back."
+                    }
+                  }
                 }
               }
             }
@@ -2801,7 +2982,21 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "matched_items": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "unmatched_names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -2894,7 +3089,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/CommissionBatchRequestDoc"
                 }
               }
             }
@@ -2944,7 +3139,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ApplicantTransactionDoc"
                 }
               }
             }
@@ -2999,7 +3194,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ApplicantTransactionDoc"
                 }
               }
             }
@@ -3040,7 +3235,12 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "subscribed": {
+                      "type": "boolean"
+                    }
+                  }
                 }
               }
             }
@@ -3100,7 +3300,12 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -3148,7 +3353,12 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -3271,7 +3481,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/ContractorDoc"
                 }
               }
             }
@@ -3399,7 +3609,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/PlacementDoc"
                 }
               }
             }
@@ -3463,7 +3673,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/PlacementDoc"
                 }
               }
             }
@@ -3541,7 +3751,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/PlacementDoc"
                 }
               }
             }
@@ -3611,7 +3821,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/PlacementDoc"
                 }
               }
             }
@@ -3675,7 +3885,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/PlacementDoc"
                 }
               }
             }
@@ -3749,7 +3959,12 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "allOf": [
+                    {
+                      "$ref": "#/definitions/PlacementDoc"
+                    }
+                  ],
+                  "description": "May include an extra 'warning' string property if cost-logging failed (see 04-finance-contract.md)."
                 }
               }
             }
@@ -3806,7 +4021,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/PlacementDoc"
                 }
               }
             }
@@ -3863,7 +4078,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/PlacementDoc"
                 }
               }
             }
@@ -4062,7 +4277,7 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "$ref": "#/definitions/PlacementDoc"
                 }
               }
             }
@@ -4275,7 +4490,29 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "new_count": {
+                      "type": "integer"
+                    },
+                    "unresolved": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "age_days": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "resolved_count": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -4329,7 +4566,19 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "from_date": {
+                      "type": "string"
+                    },
+                    "to_date": {
+                      "type": "string"
+                    },
+                    "by_country_birr": {
+                      "type": "object",
+                      "description": "Keyed by destination_country, value in Birr."
+                    }
+                  }
                 }
               }
             }
@@ -4386,14 +4635,30 @@
                 "message": {
                   "type": "object",
                   "properties": {
-                    "from_date": { "type": "string" },
-                    "to_date": { "type": "string" },
-                    "cvs_created": { "type": "integer" },
-                    "medicals_processed": { "type": "integer" },
-                    "clearances_issued": { "type": "integer" },
-                    "embassies_cleared": { "type": "integer" },
-                    "tickets_booked": { "type": "integer" },
-                    "departures_confirmed": { "type": "integer" }
+                    "from_date": {
+                      "type": "string"
+                    },
+                    "to_date": {
+                      "type": "string"
+                    },
+                    "cvs_created": {
+                      "type": "integer"
+                    },
+                    "medicals_processed": {
+                      "type": "integer"
+                    },
+                    "clearances_issued": {
+                      "type": "integer"
+                    },
+                    "embassies_cleared": {
+                      "type": "integer"
+                    },
+                    "tickets_booked": {
+                      "type": "integer"
+                    },
+                    "departures_confirmed": {
+                      "type": "integer"
+                    }
                   }
                 }
               }
@@ -4445,7 +4710,26 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "user": {
+                        "type": "string"
+                      },
+                      "net_expense_birr": {
+                        "type": "number"
+                      },
+                      "submitted_count": {
+                        "type": "integer"
+                      },
+                      "approval_rate": {
+                        "type": "number",
+                        "nullable": true,
+                        "description": "null (not 0) when submitted_count is 0."
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -4501,19 +4785,35 @@
                 "message": {
                   "type": "object",
                   "properties": {
-                    "from_date": { "type": "string" },
-                    "to_date": { "type": "string" },
+                    "from_date": {
+                      "type": "string"
+                    },
+                    "to_date": {
+                      "type": "string"
+                    },
                     "totals_birr": {
                       "type": "object",
                       "properties": {
-                        "commission": { "type": "number" },
-                        "refund": { "type": "number" },
-                        "income": { "type": "number" },
-                        "expense": { "type": "number" }
+                        "commission": {
+                          "type": "number"
+                        },
+                        "refund": {
+                          "type": "number"
+                        },
+                        "income": {
+                          "type": "number"
+                        },
+                        "expense": {
+                          "type": "number"
+                        }
                       }
                     },
-                    "outstanding_owed_birr": { "type": "number" },
-                    "settled_in_period_birr": { "type": "number" }
+                    "outstanding_owed_birr": {
+                      "type": "number"
+                    },
+                    "settled_in_period_birr": {
+                      "type": "number"
+                    }
                   }
                 }
               }
@@ -4568,8 +4868,12 @@
                 "message": {
                   "type": "object",
                   "properties": {
-                    "from_date": { "type": "string" },
-                    "to_date": { "type": "string" },
+                    "from_date": {
+                      "type": "string"
+                    },
+                    "to_date": {
+                      "type": "string"
+                    },
                     "applicant_funnel": {
                       "type": "object",
                       "description": "Current-state counts keyed by Applicant status: Draft, Registered, CV Generated, Cancelled."
@@ -4581,25 +4885,48 @@
                     "conversion_rates": {
                       "type": "object",
                       "properties": {
-                        "registered_to_cv_generated": { "type": "number", "nullable": true },
-                        "stamped_to_ticketed": { "type": "number", "nullable": true },
-                        "ticketed_to_departed": { "type": "number", "nullable": true }
+                        "registered_to_cv_generated": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "stamped_to_ticketed": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "ticketed_to_departed": {
+                          "type": "number",
+                          "nullable": true
+                        }
                       }
                     },
                     "turnaround_days": {
                       "type": "object",
                       "properties": {
-                        "selected_to_ticketed": { "type": "number", "nullable": true },
-                        "selected_to_departed": { "type": "number", "nullable": true }
+                        "selected_to_ticketed": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "selected_to_departed": {
+                          "type": "number",
+                          "nullable": true
+                        }
                       }
                     },
                     "pending_overdue": {
                       "type": "object",
                       "properties": {
-                        "placements_approaching_ticket_deadline": { "type": "integer" },
-                        "placements_critical_not_departed": { "type": "integer" },
-                        "complaints_unresolved": { "type": "integer" },
-                        "transactions_pending_approval": { "type": "integer" }
+                        "placements_approaching_ticket_deadline": {
+                          "type": "integer"
+                        },
+                        "placements_critical_not_departed": {
+                          "type": "integer"
+                        },
+                        "complaints_unresolved": {
+                          "type": "integer"
+                        },
+                        "transactions_pending_approval": {
+                          "type": "integer"
+                        }
                       }
                     }
                   }
@@ -4640,7 +4967,30 @@
               "type": "object",
               "properties": {
                 "message": {
-                  "type": "object"
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "placement": {
+                        "type": "string"
+                      },
+                      "transaction_type": {
+                        "type": "string"
+                      },
+                      "amount_birr": {
+                        "type": "number"
+                      },
+                      "logged_by": {
+                        "type": "string"
+                      },
+                      "creation": {
+                        "type": "string"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -4689,9 +5039,15 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "name": { "type": "string" },
-                          "age_days": { "type": "integer" },
-                          "status": { "type": "string" }
+                          "name": {
+                            "type": "string"
+                          },
+                          "age_days": {
+                            "type": "integer"
+                          },
+                          "status": {
+                            "type": "string"
+                          }
                         }
                       }
                     },
@@ -4700,9 +5056,15 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "name": { "type": "string" },
-                          "age_days": { "type": "integer" },
-                          "status": { "type": "string" }
+                          "name": {
+                            "type": "string"
+                          },
+                          "age_days": {
+                            "type": "integer"
+                          },
+                          "status": {
+                            "type": "string"
+                          }
                         }
                       }
                     }
@@ -4762,11 +5124,21 @@
                   "items": {
                     "type": "object",
                     "properties": {
-                      "user": { "type": "string" },
-                      "cvs_created": { "type": "integer" },
-                      "clearances_completed": { "type": "integer" },
-                      "tickets_booked": { "type": "integer" },
-                      "departures_confirmed": { "type": "integer" }
+                      "user": {
+                        "type": "string"
+                      },
+                      "cvs_created": {
+                        "type": "integer"
+                      },
+                      "clearances_completed": {
+                        "type": "integer"
+                      },
+                      "tickets_booked": {
+                        "type": "integer"
+                      },
+                      "departures_confirmed": {
+                        "type": "integer"
+                      }
                     }
                   }
                 }
@@ -4949,6 +5321,1194 @@
             "sessionCookie": []
           }
         ]
+      }
+    }
+  },
+  "definitions": {
+    "ApplicantDoc": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "creation": {
+          "type": "string"
+        },
+        "modified": {
+          "type": "string"
+        },
+        "modified_by": {
+          "type": "string"
+        },
+        "docstatus": {
+          "type": "integer"
+        },
+        "doctype": {
+          "type": "string"
+        },
+        "entry_track": {
+          "type": "string",
+          "nullable": true
+        },
+        "first_name": {
+          "type": "string",
+          "nullable": true
+        },
+        "middle_name": {
+          "type": "string",
+          "nullable": true
+        },
+        "last_name": {
+          "type": "string",
+          "nullable": true
+        },
+        "full_name": {
+          "type": "string",
+          "nullable": true
+        },
+        "gender": {
+          "type": "string",
+          "nullable": true
+        },
+        "nationality": {
+          "type": "string",
+          "nullable": true
+        },
+        "phone": {
+          "type": "string",
+          "nullable": true
+        },
+        "address": {
+          "type": "string",
+          "nullable": true
+        },
+        "date_of_birth": {
+          "type": "string",
+          "nullable": true
+        },
+        "age": {
+          "type": "integer",
+          "nullable": true
+        },
+        "height": {
+          "type": "string",
+          "nullable": true
+        },
+        "weight": {
+          "type": "string",
+          "nullable": true
+        },
+        "complexion": {
+          "type": "string",
+          "nullable": true
+        },
+        "photo_full_body": {
+          "type": "string",
+          "nullable": true
+        },
+        "national_id": {
+          "type": "string",
+          "nullable": true
+        },
+        "labor_id": {
+          "type": "string",
+          "nullable": true
+        },
+        "destination_country": {
+          "type": "string",
+          "nullable": true
+        },
+        "religion": {
+          "type": "string",
+          "nullable": true
+        },
+        "marital_status": {
+          "type": "string",
+          "nullable": true
+        },
+        "target_job": {
+          "type": "string",
+          "nullable": true
+        },
+        "education": {
+          "type": "string",
+          "nullable": true
+        },
+        "salary_amount": {
+          "type": "number",
+          "nullable": true
+        },
+        "salary_currency": {
+          "type": "string",
+          "nullable": true
+        },
+        "emergency_contact_name": {
+          "type": "string",
+          "nullable": true
+        },
+        "emergency_contact_phone": {
+          "type": "string",
+          "nullable": true
+        },
+        "emergency_contact_address": {
+          "type": "string",
+          "nullable": true
+        },
+        "passport_number": {
+          "type": "string",
+          "nullable": true
+        },
+        "passport_issue_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "passport_expiry_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "passport_issue_place": {
+          "type": "string",
+          "nullable": true
+        },
+        "passport_scan": {
+          "type": "string",
+          "nullable": true
+        },
+        "photograph": {
+          "type": "string",
+          "nullable": true
+        },
+        "medical_status": {
+          "type": "string",
+          "nullable": true
+        },
+        "medical_issue_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "medical_expiry_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "institution": {
+          "type": "string",
+          "nullable": true
+        },
+        "graduation_year": {
+          "type": "integer",
+          "nullable": true
+        },
+        "english_level": {
+          "type": "string",
+          "nullable": true
+        },
+        "arabic_level": {
+          "type": "string",
+          "nullable": true
+        },
+        "current_employer": {
+          "type": "string",
+          "nullable": true
+        },
+        "years_of_experience": {
+          "type": "integer",
+          "nullable": true
+        },
+        "experience_country": {
+          "type": "string",
+          "nullable": true
+        },
+        "experience_period": {
+          "type": "string",
+          "nullable": true
+        },
+        "education_remarks": {
+          "type": "string",
+          "nullable": true
+        },
+        "skill_cleaning": {
+          "type": "integer",
+          "nullable": true
+        },
+        "skill_cooking": {
+          "type": "integer",
+          "nullable": true
+        },
+        "skill_washing": {
+          "type": "integer",
+          "nullable": true
+        },
+        "skill_ironing": {
+          "type": "integer",
+          "nullable": true
+        },
+        "skill_baby_sitting": {
+          "type": "integer",
+          "nullable": true
+        },
+        "skill_children_care": {
+          "type": "integer",
+          "nullable": true
+        },
+        "skill_arabic_cooking": {
+          "type": "integer",
+          "nullable": true
+        },
+        "skill_elderly_care": {
+          "type": "integer",
+          "nullable": true
+        },
+        "skill_driving": {
+          "type": "integer",
+          "nullable": true
+        },
+        "skill_sewing": {
+          "type": "integer",
+          "nullable": true
+        },
+        "coc_status": {
+          "type": "string",
+          "nullable": true
+        },
+        "exam_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "children": {
+          "type": "integer",
+          "nullable": true
+        },
+        "city": {
+          "type": "string",
+          "nullable": true
+        },
+        "country": {
+          "type": "string",
+          "nullable": true
+        },
+        "region": {
+          "type": "string",
+          "nullable": true
+        },
+        "sub_region": {
+          "type": "string",
+          "nullable": true
+        },
+        "leaving_town": {
+          "type": "string",
+          "nullable": true
+        },
+        "alternate_phone": {
+          "type": "string",
+          "nullable": true
+        },
+        "email": {
+          "type": "string",
+          "nullable": true
+        },
+        "remarks": {
+          "type": "string",
+          "nullable": true
+        },
+        "medical_remarks": {
+          "type": "string",
+          "nullable": true
+        },
+        "fee_required": {
+          "type": "integer",
+          "nullable": true
+        },
+        "fee_type": {
+          "type": "string",
+          "nullable": true
+        },
+        "fee_direction": {
+          "type": "string",
+          "nullable": true
+        },
+        "registration_fee_amount": {
+          "type": "number",
+          "nullable": true
+        },
+        "fee_currency": {
+          "type": "string",
+          "nullable": true
+        },
+        "fee_status": {
+          "type": "string",
+          "nullable": true
+        },
+        "fee_payment_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "fee_transaction": {
+          "type": "string",
+          "nullable": true
+        },
+        "fee_notes": {
+          "type": "string",
+          "nullable": true
+        },
+        "fee_log": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "status": {
+          "type": "string",
+          "nullable": true
+        },
+        "active_placement": {
+          "type": "string",
+          "nullable": true
+        },
+        "cycle_number": {
+          "type": "integer",
+          "nullable": true
+        }
+      }
+    },
+    "PlacementDoc": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "creation": {
+          "type": "string"
+        },
+        "modified": {
+          "type": "string"
+        },
+        "modified_by": {
+          "type": "string"
+        },
+        "docstatus": {
+          "type": "integer"
+        },
+        "doctype": {
+          "type": "string"
+        },
+        "applicant": {
+          "type": "string",
+          "nullable": true
+        },
+        "contractor": {
+          "type": "string",
+          "nullable": true
+        },
+        "destination_country": {
+          "type": "string",
+          "nullable": true
+        },
+        "status": {
+          "type": "string",
+          "nullable": true
+        },
+        "cv_record": {
+          "type": "string",
+          "nullable": true
+        },
+        "cycle_number": {
+          "type": "integer",
+          "nullable": true
+        },
+        "contract_file": {
+          "type": "string",
+          "nullable": true
+        },
+        "contract_signed_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "contract_number": {
+          "type": "string",
+          "nullable": true
+        },
+        "visa_number": {
+          "type": "string",
+          "nullable": true
+        },
+        "employer_name": {
+          "type": "string",
+          "nullable": true
+        },
+        "employer_national_id": {
+          "type": "string",
+          "nullable": true
+        },
+        "employer_address": {
+          "type": "string",
+          "nullable": true
+        },
+        "saudi_agency_name": {
+          "type": "string",
+          "nullable": true
+        },
+        "saudi_agency_license": {
+          "type": "string",
+          "nullable": true
+        },
+        "employment_site": {
+          "type": "string",
+          "nullable": true
+        },
+        "contract_duration": {
+          "type": "string",
+          "nullable": true
+        },
+        "contract_salary_amount": {
+          "type": "number",
+          "nullable": true
+        },
+        "contract_salary_currency": {
+          "type": "string",
+          "nullable": true
+        },
+        "visa_file": {
+          "type": "string",
+          "nullable": true
+        },
+        "visa_type": {
+          "type": "string",
+          "nullable": true
+        },
+        "visa_issue_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "visa_expiry_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "visa_reference_number": {
+          "type": "string",
+          "nullable": true
+        },
+        "sponsor_name": {
+          "type": "string",
+          "nullable": true
+        },
+        "sponsor_civil_id": {
+          "type": "string",
+          "nullable": true
+        },
+        "kuwait_agency_name": {
+          "type": "string",
+          "nullable": true
+        },
+        "kuwait_agency_license": {
+          "type": "string",
+          "nullable": true
+        },
+        "medical_selected_examination_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "medical_selected_status": {
+          "type": "string",
+          "nullable": true
+        },
+        "medical_selected_expiry_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "medical_2_examination_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "medical_2_status": {
+          "type": "string",
+          "nullable": true
+        },
+        "ticket_number": {
+          "type": "string",
+          "nullable": true
+        },
+        "flight_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "ticket_cost": {
+          "type": "number",
+          "nullable": true
+        },
+        "is_rescheduled": {
+          "type": "integer",
+          "nullable": true
+        },
+        "reschedule_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "reschedule_cause": {
+          "type": "string",
+          "nullable": true
+        },
+        "reschedule_cost": {
+          "type": "number",
+          "nullable": true
+        },
+        "manual_commission_amount": {
+          "type": "number",
+          "nullable": true
+        },
+        "manual_commission_currency": {
+          "type": "string",
+          "nullable": true
+        },
+        "is_free_replacement": {
+          "type": "integer",
+          "nullable": true
+        },
+        "free_replacement_for_complaint": {
+          "type": "string",
+          "nullable": true
+        },
+        "departed_on": {
+          "type": "string",
+          "nullable": true
+        }
+      }
+    },
+    "ClearanceStepDoc": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "creation": {
+          "type": "string"
+        },
+        "modified": {
+          "type": "string"
+        },
+        "modified_by": {
+          "type": "string"
+        },
+        "docstatus": {
+          "type": "integer"
+        },
+        "doctype": {
+          "type": "string"
+        },
+        "placement": {
+          "type": "string",
+          "nullable": true
+        },
+        "step_type": {
+          "type": "string",
+          "nullable": true
+        },
+        "sequence_order": {
+          "type": "integer",
+          "nullable": true
+        },
+        "is_mandatory": {
+          "type": "integer",
+          "nullable": true
+        },
+        "status": {
+          "type": "string",
+          "nullable": true
+        },
+        "date_started": {
+          "type": "string",
+          "nullable": true
+        },
+        "date_completed": {
+          "type": "string",
+          "nullable": true
+        },
+        "completed_by": {
+          "type": "string",
+          "nullable": true
+        },
+        "reference_no": {
+          "type": "string",
+          "nullable": true
+        },
+        "amount": {
+          "type": "number",
+          "nullable": true
+        },
+        "payment_status": {
+          "type": "string",
+          "nullable": true
+        },
+        "appointment_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "injaz_applicant_number": {
+          "type": "string",
+          "nullable": true
+        },
+        "injaz_amount": {
+          "type": "number",
+          "nullable": true
+        },
+        "injaz_payment_status": {
+          "type": "string",
+          "nullable": true
+        },
+        "injaz_paid_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "injaz_receipt_number": {
+          "type": "string",
+          "nullable": true
+        },
+        "injaz_receipt_photo": {
+          "type": "string",
+          "nullable": true
+        },
+        "rejection_remark": {
+          "type": "string",
+          "nullable": true
+        },
+        "wakala_amount": {
+          "type": "number",
+          "nullable": true
+        },
+        "wakala_status": {
+          "type": "string",
+          "nullable": true
+        },
+        "wakala_paid_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "police_ashara_appointment_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "police_ashara_status": {
+          "type": "string",
+          "nullable": true
+        },
+        "police_ashara_remark": {
+          "type": "string",
+          "nullable": true
+        },
+        "police_ashara_amount": {
+          "type": "number",
+          "nullable": true
+        },
+        "police_ashara_payment_status": {
+          "type": "string",
+          "nullable": true
+        },
+        "payments": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "ApplicantTransactionDoc": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "creation": {
+          "type": "string"
+        },
+        "modified": {
+          "type": "string"
+        },
+        "modified_by": {
+          "type": "string"
+        },
+        "docstatus": {
+          "type": "integer"
+        },
+        "doctype": {
+          "type": "string"
+        },
+        "applicant": {
+          "type": "string",
+          "nullable": true
+        },
+        "placement": {
+          "type": "string",
+          "nullable": true
+        },
+        "cycle_number": {
+          "type": "integer",
+          "nullable": true
+        },
+        "transaction_type": {
+          "type": "string",
+          "nullable": true
+        },
+        "stage_logged_at": {
+          "type": "string",
+          "nullable": true
+        },
+        "status": {
+          "type": "string",
+          "nullable": true
+        },
+        "logged_by": {
+          "type": "string",
+          "nullable": true
+        },
+        "amount_original": {
+          "type": "number",
+          "nullable": true
+        },
+        "currency_original": {
+          "type": "string",
+          "nullable": true
+        },
+        "fx_rate": {
+          "type": "number",
+          "nullable": true
+        },
+        "fx_rate_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "amount_birr": {
+          "type": "number",
+          "nullable": true
+        },
+        "description": {
+          "type": "string",
+          "nullable": true
+        },
+        "receipt_image": {
+          "type": "string",
+          "nullable": true
+        },
+        "commission_batch_request": {
+          "type": "string",
+          "nullable": true
+        },
+        "approved_by": {
+          "type": "string",
+          "nullable": true
+        },
+        "approved_on": {
+          "type": "string",
+          "nullable": true
+        },
+        "rejection_reason": {
+          "type": "string",
+          "nullable": true
+        }
+      }
+    },
+    "CommissionBatchRequestDoc": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "creation": {
+          "type": "string"
+        },
+        "modified": {
+          "type": "string"
+        },
+        "modified_by": {
+          "type": "string"
+        },
+        "docstatus": {
+          "type": "integer"
+        },
+        "doctype": {
+          "type": "string"
+        },
+        "contractor": {
+          "type": "string",
+          "nullable": true
+        },
+        "destination_country": {
+          "type": "string",
+          "nullable": true
+        },
+        "status": {
+          "type": "string",
+          "nullable": true
+        },
+        "total_amount_birr": {
+          "type": "number",
+          "nullable": true
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "settlement_reference": {
+          "type": "string",
+          "nullable": true
+        },
+        "settled_on": {
+          "type": "string",
+          "nullable": true
+        }
+      }
+    },
+    "CommissionBatchItemDoc": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "creation": {
+          "type": "string"
+        },
+        "modified": {
+          "type": "string"
+        },
+        "modified_by": {
+          "type": "string"
+        },
+        "docstatus": {
+          "type": "integer"
+        },
+        "doctype": {
+          "type": "string"
+        },
+        "transaction": {
+          "type": "string",
+          "nullable": true
+        },
+        "status": {
+          "type": "string",
+          "nullable": true
+        }
+      }
+    },
+    "ComplaintDoc": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "creation": {
+          "type": "string"
+        },
+        "modified": {
+          "type": "string"
+        },
+        "modified_by": {
+          "type": "string"
+        },
+        "docstatus": {
+          "type": "integer"
+        },
+        "doctype": {
+          "type": "string"
+        },
+        "placement": {
+          "type": "string",
+          "nullable": true
+        },
+        "contractor": {
+          "type": "string",
+          "nullable": true
+        },
+        "raised_by": {
+          "type": "string",
+          "nullable": true
+        },
+        "worker_status_at_complaint": {
+          "type": "string",
+          "nullable": true
+        },
+        "description": {
+          "type": "string",
+          "nullable": true
+        },
+        "status": {
+          "type": "string",
+          "nullable": true
+        },
+        "resolution_notes": {
+          "type": "string",
+          "nullable": true
+        },
+        "resolved_by": {
+          "type": "string",
+          "nullable": true
+        },
+        "resolved_on": {
+          "type": "string",
+          "nullable": true
+        }
+      }
+    },
+    "ChatThreadDoc": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "creation": {
+          "type": "string"
+        },
+        "modified": {
+          "type": "string"
+        },
+        "modified_by": {
+          "type": "string"
+        },
+        "docstatus": {
+          "type": "integer"
+        },
+        "doctype": {
+          "type": "string"
+        },
+        "thread_type": {
+          "type": "string",
+          "nullable": true
+        },
+        "contractor": {
+          "type": "string",
+          "nullable": true
+        },
+        "context_type": {
+          "type": "string",
+          "nullable": true
+        },
+        "context_reference": {
+          "type": "string",
+          "nullable": true
+        },
+        "last_message_at": {
+          "type": "string",
+          "nullable": true
+        },
+        "participants": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "ChatMessageDoc": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "creation": {
+          "type": "string"
+        },
+        "modified": {
+          "type": "string"
+        },
+        "modified_by": {
+          "type": "string"
+        },
+        "docstatus": {
+          "type": "integer"
+        },
+        "doctype": {
+          "type": "string"
+        },
+        "thread": {
+          "type": "string",
+          "nullable": true
+        },
+        "sender": {
+          "type": "string",
+          "nullable": true
+        },
+        "mentioned_applicant": {
+          "type": "string",
+          "nullable": true
+        },
+        "mentioned_placement": {
+          "type": "string",
+          "nullable": true
+        },
+        "message": {
+          "type": "string",
+          "nullable": true
+        },
+        "attachment": {
+          "type": "string",
+          "nullable": true
+        }
+      }
+    },
+    "ContractorDoc": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "creation": {
+          "type": "string"
+        },
+        "modified": {
+          "type": "string"
+        },
+        "modified_by": {
+          "type": "string"
+        },
+        "docstatus": {
+          "type": "integer"
+        },
+        "doctype": {
+          "type": "string"
+        },
+        "contractor_name": {
+          "type": "string",
+          "nullable": true
+        },
+        "country": {
+          "type": "string",
+          "nullable": true
+        },
+        "user": {
+          "type": "string",
+          "nullable": true
+        },
+        "communication_manager": {
+          "type": "string",
+          "nullable": true
+        },
+        "batch_mode": {
+          "type": "string",
+          "nullable": true
+        },
+        "batch_threshold": {
+          "type": "integer",
+          "nullable": true
+        },
+        "default_commission_rates": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "FXRateDoc": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "creation": {
+          "type": "string"
+        },
+        "modified": {
+          "type": "string"
+        },
+        "modified_by": {
+          "type": "string"
+        },
+        "docstatus": {
+          "type": "integer"
+        },
+        "doctype": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string",
+          "nullable": true
+        },
+        "rate_date": {
+          "type": "string",
+          "nullable": true
+        },
+        "rate_to_birr": {
+          "type": "number",
+          "nullable": true
+        }
+      }
+    },
+    "ApplicantCountryBanDoc": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "creation": {
+          "type": "string"
+        },
+        "modified": {
+          "type": "string"
+        },
+        "modified_by": {
+          "type": "string"
+        },
+        "docstatus": {
+          "type": "integer"
+        },
+        "doctype": {
+          "type": "string"
+        },
+        "applicant": {
+          "type": "string",
+          "nullable": true
+        },
+        "country": {
+          "type": "string",
+          "nullable": true
+        },
+        "set_by": {
+          "type": "string",
+          "nullable": true
+        },
+        "set_on": {
+          "type": "string",
+          "nullable": true
+        },
+        "reason": {
+          "type": "string",
+          "nullable": true
+        }
       }
     }
   }
