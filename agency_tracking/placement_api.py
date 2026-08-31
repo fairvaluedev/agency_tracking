@@ -6,7 +6,7 @@
 import frappe
 
 from agency_tracking.contract_parser import parse_contract_file, parse_visa_file
-from agency_tracking.state_machine import lock_applicant_row, transition
+from agency_tracking.state_machine import assert_placement_not_terminal, lock_applicant_row, transition
 
 
 def _linked_contractor_or_staff_write(placement):
@@ -142,6 +142,7 @@ def record_selected_medical_result(placement_name, status, examination_date=None
 	placement = frappe.get_doc("Placement", placement_name)
 	if not placement.has_permission("write"):
 		frappe.throw("Not permitted.", frappe.PermissionError)
+	assert_placement_not_terminal(placement)
 
 	placement.medical_selected_status = status
 	placement.medical_selected_examination_date = examination_date
@@ -169,6 +170,7 @@ def record_predeparture_medical_result(placement_name, status, examination_date=
 	placement = frappe.get_doc("Placement", placement_name)
 	if not placement.has_permission("write"):
 		frappe.throw("Not permitted.", frappe.PermissionError)
+	assert_placement_not_terminal(placement)
 
 	placement.medical_2_status = status
 	placement.medical_2_examination_date = examination_date
@@ -218,6 +220,7 @@ def record_ticket_details(placement_name, ticket_number, flight_date, ticket_cos
 	placement = frappe.get_doc("Placement", placement_name)
 	if not placement.has_permission("write"):
 		frappe.throw("Not permitted.", frappe.PermissionError)
+	assert_placement_not_terminal(placement)
 
 	placement.ticket_number = ticket_number
 	placement.flight_date = flight_date
@@ -257,6 +260,7 @@ def record_reschedule(placement_name, reschedule_date, reschedule_cause, resched
 	placement = frappe.get_doc("Placement", placement_name)
 	if not placement.has_permission("write"):
 		frappe.throw("Not permitted.", frappe.PermissionError)
+	assert_placement_not_terminal(placement)
 
 	placement.is_rescheduled = 1
 	placement.reschedule_date = reschedule_date

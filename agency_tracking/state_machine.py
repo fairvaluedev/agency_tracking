@@ -22,6 +22,56 @@ def lock_applicant_row(applicant_name):
 	frappe.db.sql("SELECT `name` FROM `tabApplicant` WHERE `name`=%s FOR UPDATE", applicant_name)
 
 
+# --- Terminal-state guards (2026-08-31, cc2 QA pass findings NEW-1 / NEW-3) ---
+# A class of endpoints record an outcome via a plain doc.save() rather than transition() (they
+# don't change Placement.status themselves -- record_ticket_details, record_reschedule, the
+# medical-result recorders, and every Clearance Step action below), so ALLOWED_TRANSITIONS/
+# STAGE_GATES never see them and never got a chance to block a write once the parent record is
+# already in a terminal state. Confirmed live: a Ticketer could silently rewrite ticket_number
+# on an already-Departed Placement, and a Kuwait Embassy user could flip an already-Stamped step
+# on an already-Departed Placement back to Rejected -- both with no audit trail (no Process
+# Event, since neither goes through transition()). These two shared guards are the single place
+# every such action now checks before writing, rather than patching each endpoint in isolation.
+
+TERMINAL_PLACEMENT_STATUSES = {"Departed", "Cancelled"}
+TERMINAL_CLEARANCE_STEP_STATUSES = {"Issued", "Complete", "Stamped", "Rejected"}
+
+
+def assert_placement_not_terminal(placement):
+	"""Guards every Placement-mutating action that records an outcome without itself being a
+	transition() call (record_ticket_details, record_reschedule,
+	record_selected_medical_result, record_predeparture_medical_result). Once Departed/Cancelled,
+	ticketing/medical data is a historical record, not something a routine action should still
+	be able to silently overwrite."""
+	if placement.status in TERMINAL_PLACEMENT_STATUSES:
+		frappe.throw(
+			f"{placement.name} is already {placement.status} (terminal) -- this can no longer "
+			"be edited through this action.",
+			frappe.ValidationError,
+		)
+
+
+def assert_clearance_step_not_terminal(step):
+	"""Guards every Clearance-Step-mutating action (start/complete_clearance_step,
+	submit/stamp/reject_embassy_step, reassign_clearance_step). Once a step itself reaches a
+	terminal outcome, or its parent Placement is already Departed/Cancelled, it's a historical
+	record -- flipping a Stamped step to Rejected (or vice versa) after the fact produces
+	self-contradictory data (a Departed placement whose corridor step says it never cleared)."""
+	if step.status in TERMINAL_CLEARANCE_STEP_STATUSES:
+		frappe.throw(
+			f"{step.name} is already {step.status} (terminal) -- this can no longer be edited "
+			"through this action.",
+			frappe.ValidationError,
+		)
+	placement_status = frappe.db.get_value("Placement", step.placement, "status")
+	if placement_status in TERMINAL_PLACEMENT_STATUSES:
+		frappe.throw(
+			f"{step.placement} is already {placement_status} -- its Clearance Steps can no "
+			"longer be edited.",
+			frappe.ValidationError,
+		)
+
+
 # doctype -> set of (from_status, to_status) edges that are legal to attempt.
 # Extended as each build step introduces new statuses (Placement's Selected/Processing/
 # Stamped/Ticketed/Departed land here from Step 3 onward).

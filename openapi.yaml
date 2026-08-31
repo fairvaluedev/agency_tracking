@@ -548,7 +548,7 @@ paths:
     post:
       tags: [Placement & Corridor]
       summary: Post-contract medical checkpoint (gates Selected → Processing)
-      description: New 2026-08-29 checkpoint, distinct from the Applicant's pre-Registered medical and the later pre-departure Medical 2 check. UNFIT cancels the whole Applicant + Placement via the same cascade as cancel_applicant — applies uniformly to every track/country.
+      description: New 2026-08-29 checkpoint, distinct from the Applicant's pre-Registered medical and the later pre-departure Medical 2 check. UNFIT cancels the whole Applicant + Placement via the same cascade as cancel_applicant — applies uniformly to every track/country. Blocked (417) once the Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-1).
       requestBody:
         content:
           application/json:
@@ -571,7 +571,8 @@ paths:
         backend-issues #01: this was previously impossible to satisfy — medical_2_status had
         no whitelisted writer anywhere, so no Placement could ever legally reach Departed.
         Mirrors record_selected_medical_result's shape: FIT records the result; UNFIT cancels
-        the whole Applicant + Placement via the same cascade as cancel_applicant.
+        the whole Applicant + Placement via the same cascade as cancel_applicant. Blocked (417)
+        once the Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-1).
       requestBody:
         content:
           application/json:
@@ -630,7 +631,7 @@ paths:
     post:
       tags: [Placement & Corridor]
       summary: Record flight/ticket details (Ticketer role)
-      description: ticket_cost, if given, auto-logs a Pending Applicant Transaction expense (Finance approval still required before it counts toward any ledger total).
+      description: ticket_cost, if given, auto-logs a Pending Applicant Transaction expense (Finance approval still required before it counts toward any ledger total). Blocked (417) once the Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-1).
       requestBody:
         content:
           application/json:
@@ -650,7 +651,7 @@ paths:
     post:
       tags: [Placement & Corridor]
       summary: Record a flight reschedule (Ticketer role)
-      description: reschedule_cost only meaningful/billed when cause is Internal — an Airport/airline-caused reschedule isn't billed to the agency.
+      description: reschedule_cost only meaningful/billed when cause is Internal — an Airport/airline-caused reschedule isn't billed to the agency. Blocked (417) once the Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-1).
       requestBody:
         content:
           application/json:
@@ -677,7 +678,9 @@ paths:
         this exact row, OR anyone holding the role mapped to this step_type (Saudi LMIS/Saudi
         Taeshir/Saudi Embassy/Kuwait LMIS/Kuwait Telesign/Kuwait Embassy), OR Manager/Admin.
         Throws if called on an Embassy step (use the three submit/stamp/reject functions below
-        instead).
+        instead). Blocked (417) once the step is already terminal (Issued/Complete/Stamped/
+        Rejected) or its parent Placement is already Departed/Cancelled (cc2 QA pass,
+        backend-issues NEW-3).
       requestBody:
         content:
           application/json:
@@ -695,6 +698,7 @@ paths:
     post:
       tags: [Clearance Steps]
       summary: Mark a Clearance Step In Progress
+      description: Blocked (417) once the step is already terminal (Issued/Complete/Stamped/Rejected) or its parent Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-3).
       requestBody:
         content:
           application/json:
@@ -709,7 +713,7 @@ paths:
     post:
       tags: [Clearance Steps]
       summary: Embassy step — documents submitted (Monday)
-      description: Saudi Embassy/Kuwait Embassy step_type only.
+      description: Saudi Embassy/Kuwait Embassy step_type only. Blocked (417) once the step is already terminal (Issued/Complete/Stamped/Rejected) or its parent Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-3).
       requestBody:
         content:
           application/json:
@@ -724,6 +728,7 @@ paths:
     post:
       tags: [Clearance Steps]
       summary: Embassy step — documents returned stamped (Thursday, success outcome)
+      description: Blocked (417) once the step is already terminal (Issued/Complete/Stamped/Rejected) or its parent Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-3).
       requestBody:
         content:
           application/json:
@@ -740,6 +745,11 @@ paths:
     post:
       tags: [Clearance Steps]
       summary: Embassy step — documents returned rejected (Thursday, failure outcome)
+      description: >
+        Blocked (417) once the step is already terminal (Issued/Complete/Stamped/Rejected) or
+        its parent Placement is already Departed/Cancelled (cc2 QA pass exact repro: a Kuwait
+        Embassy user could flip an already-Stamped step on an already-Departed Placement back
+        to Rejected — backend-issues NEW-3).
       requestBody:
         content:
           application/json:
@@ -756,7 +766,7 @@ paths:
     post:
       tags: [Clearance Steps]
       summary: Reassign a Clearance Step's ToDo to a different officer
-      description: Manager/Admin only — the escape hatch for the default auto-chain/role-broadcast.
+      description: Manager/Admin only — the escape hatch for the default auto-chain/role-broadcast. Blocked (417) once the step is already terminal (Issued/Complete/Stamped/Rejected) or its parent Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-3).
       requestBody:
         content:
           application/json:

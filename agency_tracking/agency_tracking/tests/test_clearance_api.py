@@ -5,7 +5,14 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from agency_tracking.agency_tracking.tests.test_clearance_engine import saudi_selected_placement
-from agency_tracking.clearance_api import complete_clearance_step, reassign_clearance_step, start_clearance_step
+from agency_tracking.agency_tracking.tests.test_finance_engine import departed_placement
+from agency_tracking.clearance_api import (
+	complete_clearance_step,
+	reassign_clearance_step,
+	reject_embassy_step,
+	stamp_embassy_step,
+	start_clearance_step,
+)
 from agency_tracking.clearance_engine import assign_clearance_step
 from agency_tracking.state_machine import transition
 
@@ -120,3 +127,39 @@ class TestClearanceAPI(FrappeTestCase):
 		frappe.set_user("Administrator")
 		result = reassign_clearance_step(step_name, new_officer.name)
 		self.assertEqual(result["assigned_to"], new_officer.name)
+
+	def test_complete_clearance_step_blocked_once_already_issued(self):
+		# cc2 QA pass, finding NEW-3's bug class: no clearance-step action checked whether the
+		# step was already in a terminal state before overwriting it.
+		placement = saudi_selected_placement("ca05")
+		transition(placement, "Processing")
+		step_name = self._first_step(placement)
+		complete_clearance_step(step_name)
+		self.assertEqual(frappe.db.get_value("Clearance Step", step_name, "status"), "Issued")
+
+		with self.assertRaises(frappe.ValidationError):
+			complete_clearance_step(step_name)
+
+	def test_reject_embassy_step_blocked_once_placement_departed(self):
+		# cc2 QA pass, finding NEW-3 exact repro: a Kuwait/Saudi Embassy user could flip an
+		# already-Stamped step on an already-Departed Placement back to Rejected, producing a
+		# self-contradictory record (Departed placement, Rejected corridor step).
+		placement = departed_placement("ca06")
+		embassy_step = frappe.db.get_value(
+			"Clearance Step", {"placement": placement.name, "step_type": "Embassy"}, "name"
+		)
+		self.assertEqual(frappe.db.get_value("Clearance Step", embassy_step, "status"), "Stamped")
+
+		with self.assertRaises(frappe.ValidationError):
+			reject_embassy_step(embassy_step, "QA test - probing terminal-state guard")
+
+		self.assertEqual(frappe.db.get_value("Clearance Step", embassy_step, "status"), "Stamped")
+		self.assertEqual(frappe.db.get_value("Placement", placement.name, "status"), "Departed")
+
+	def test_stamp_embassy_step_blocked_once_already_stamped(self):
+		placement = departed_placement("ca07")
+		embassy_step = frappe.db.get_value(
+			"Clearance Step", {"placement": placement.name, "step_type": "Embassy"}, "name"
+		)
+		with self.assertRaises(frappe.ValidationError):
+			stamp_embassy_step(embassy_step)

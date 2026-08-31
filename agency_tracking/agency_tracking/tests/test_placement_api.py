@@ -14,6 +14,7 @@ from agency_tracking.placement_api import (
 	create_muayena_placement,
 	list_placements,
 	record_predeparture_medical_result,
+	record_reschedule,
 	record_ticket_details,
 	upload_contract,
 )
@@ -158,6 +159,21 @@ class TestPlacementAPI(FrappeTestCase):
 
 		final = advance_placement(placement["name"], "Departed")
 		self.assertEqual(final["status"], "Departed")
+
+		# cc2 QA pass, finding NEW-1 exact repro: a Ticketer could silently rewrite
+		# ticket_number/flight_date on an already-Departed Placement, with no audit trail.
+		with self.assertRaises(frappe.ValidationError):
+			record_ticket_details(placement["name"], "TK-HACK", "2099-01-01")
+		unchanged = frappe.db.get_value(
+			"Placement", placement["name"], ["ticket_number", "flight_date"], as_dict=True
+		)
+		self.assertEqual(unchanged.ticket_number, "TK-mpa10")
+
+		with self.assertRaises(frappe.ValidationError):
+			record_predeparture_medical_result(placement["name"], "FIT")
+
+		with self.assertRaises(frappe.ValidationError):
+			record_reschedule(placement["name"], "2099-01-01", "Internal")
 
 	def test_record_predeparture_medical_result_unfit_cancels_applicant(self):
 		from agency_tracking.agency_tracking.tests.test_state_machine import complete_all_clearance_steps

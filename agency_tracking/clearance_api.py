@@ -8,6 +8,7 @@ from frappe.utils import today
 
 from agency_tracking.clearance_engine import assign_clearance_step
 from agency_tracking.agency_tracking.doctype.clearance_step.clearance_step import CLEARANCE_ROLE_BY_STEP_TYPE
+from agency_tracking.state_machine import assert_clearance_step_not_terminal
 
 # LMIS (both countries) completes to "Issued" -- everything else that uses the plain
 # complete_clearance_step() path (Taeshir, Telesign) uses the generic "Complete". Embassy
@@ -71,6 +72,7 @@ def complete_clearance_step(clearance_step_name, reference_no=None, amount=None)
 		)
 	if not _can_act_on_step(step):
 		frappe.throw("Not permitted.", frappe.PermissionError)
+	assert_clearance_step_not_terminal(step)
 
 	step.status = TERMINAL_STATUS_BY_STEP_TYPE.get(step.step_type, DEFAULT_TERMINAL_STATUS)
 	step.date_completed = today()
@@ -90,6 +92,7 @@ def start_clearance_step(clearance_step_name):
 	step = frappe.get_doc("Clearance Step", clearance_step_name)
 	if not _can_act_on_step(step):
 		frappe.throw("Not permitted.", frappe.PermissionError)
+	assert_clearance_step_not_terminal(step)
 	step.status = "In Progress"
 	step.date_started = today()
 	step.save(ignore_permissions=True)
@@ -104,6 +107,7 @@ def submit_embassy_step(clearance_step_name):
 		frappe.throw("Only meaningful for an Embassy clearance step.", frappe.ValidationError)
 	if not _can_act_on_step(step):
 		frappe.throw("Not permitted.", frappe.PermissionError)
+	assert_clearance_step_not_terminal(step)
 	step.status = "Submitted"
 	step.date_started = today()
 	step.save(ignore_permissions=True)
@@ -118,6 +122,7 @@ def stamp_embassy_step(clearance_step_name, reference_no=None):
 		frappe.throw("Only meaningful for an Embassy clearance step.", frappe.ValidationError)
 	if not _can_act_on_step(step):
 		frappe.throw("Not permitted.", frappe.PermissionError)
+	assert_clearance_step_not_terminal(step)
 	step.status = "Stamped"
 	step.date_completed = today()
 	step.completed_by = frappe.session.user
@@ -139,6 +144,7 @@ def reject_embassy_step(clearance_step_name, rejection_remark):
 		frappe.throw("Only meaningful for an Embassy clearance step.", frappe.ValidationError)
 	if not _can_act_on_step(step):
 		frappe.throw("Not permitted.", frappe.PermissionError)
+	assert_clearance_step_not_terminal(step)
 	step.status = "Rejected"
 	step.rejection_remark = rejection_remark
 	step.date_completed = today()
@@ -154,6 +160,7 @@ def reassign_clearance_step(clearance_step_name, new_officer):
 	auto-chain."""
 	if not ({"Manager", "Admin"} & set(frappe.get_roles())):
 		frappe.throw("Not permitted.", frappe.PermissionError)
+	assert_clearance_step_not_terminal(frappe.get_doc("Clearance Step", clearance_step_name))
 	assign_clearance_step(clearance_step_name, new_officer)
 	return {"clearance_step": clearance_step_name, "assigned_to": new_officer}
 

@@ -1350,7 +1350,7 @@
           "Clearance Steps"
         ],
         "summary": "Mark a Clearance Step complete/Issued",
-        "description": "Not for Embassy steps. LMIS (both countries) completes to 'Issued'; everything else (Taeshir, Telesign) completes to the generic 'Complete'.",
+        "description": "Not for Embassy steps. LMIS (both countries) completes to 'Issued'; everything else (Taeshir, Telesign) completes to the generic 'Complete'. Blocked (417) once the step is already terminal (Issued/Complete/Stamped/Rejected) or its parent Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-3).",
         "x-roles": [
           "Manager/Admin",
           "The ToDo-assigned officer (Clearance Officer/Ticketer)",
@@ -1453,7 +1453,7 @@
           "Clearance Steps"
         ],
         "summary": "Reassign a Clearance Step to a different officer",
-        "description": "The escape hatch for the default auto-chain assignment.",
+        "description": "The escape hatch for the default auto-chain assignment. Blocked (417) once the step is already terminal (Issued/Complete/Stamped/Rejected) or its parent Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-3).",
         "x-roles": [
           "Manager",
           "Admin"
@@ -1509,7 +1509,7 @@
           "Clearance Steps"
         ],
         "summary": "Mark an Embassy step Rejected (Thursday, failure outcome)",
-        "description": "Saudi/Kuwait Embassy only. A written rejection_remark is required.",
+        "description": "Saudi/Kuwait Embassy only. A written rejection_remark is required. Blocked (417) once the step is already terminal (Issued/Complete/Stamped/Rejected) or its parent Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-3).",
         "x-roles": [
           "Manager/Admin",
           "The ToDo-assigned officer",
@@ -1565,7 +1565,7 @@
           "Clearance Steps"
         ],
         "summary": "Mark an Embassy step Stamped (Thursday, success outcome)",
-        "description": "Saudi/Kuwait Embassy only.",
+        "description": "Saudi/Kuwait Embassy only. Blocked (417) once the step is already terminal (Issued/Complete/Stamped/Rejected) or its parent Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-3).",
         "x-roles": [
           "Manager/Admin",
           "The ToDo-assigned officer",
@@ -1621,7 +1621,7 @@
           "Clearance Steps"
         ],
         "summary": "Mark a Clearance Step In Progress",
-        "description": "",
+        "description": "Blocked (417) once the step is already terminal (Issued/Complete/Stamped/Rejected) or its parent Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-3).",
         "x-roles": [
           "Manager/Admin",
           "The ToDo-assigned officer",
@@ -1671,7 +1671,7 @@
           "Clearance Steps"
         ],
         "summary": "Submit an Embassy step's documents (Monday)",
-        "description": "Saudi/Kuwait Embassy only. Pending -> Submitted.",
+        "description": "Saudi/Kuwait Embassy only. Pending -> Submitted. Blocked (417) once the step is already terminal (Issued/Complete/Stamped/Rejected) or its parent Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-3).",
         "x-roles": [
           "Manager/Admin",
           "The ToDo-assigned officer",
@@ -3488,7 +3488,7 @@
           "Placement"
         ],
         "summary": "Record a ticket reschedule",
-        "description": "reschedule_cost only meaningful/loggable when cause=Internal -- an airline/airport-caused reschedule isn't billed to the agency.",
+        "description": "reschedule_cost only meaningful/loggable when cause=Internal -- an airline/airport-caused reschedule isn't billed to the agency. Blocked (417) once the Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-1).",
         "x-roles": [
           "Ticketer",
           "Write access to the Placement"
@@ -3566,7 +3566,7 @@
           "Placement"
         ],
         "summary": "Record the post-contract medical result",
-        "description": "Gates Selected -> Processing. FIT just records the result; UNFIT cancels the whole Applicant + Placement via the same cascade as cancel_applicant.",
+        "description": "Gates Selected -> Processing. FIT just records the result; UNFIT cancels the whole Applicant + Placement via the same cascade as cancel_applicant. Blocked (417) once the Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-1).",
         "x-roles": [
           "Write access to the Placement"
         ],
@@ -3636,7 +3636,7 @@
           "Placement"
         ],
         "summary": "Record the pre-departure (Medical 2) result",
-        "description": "Gates Ticketed -> Departed. FIT just records the result; UNFIT cancels the whole Applicant + Placement via the same cascade as cancel_applicant.",
+        "description": "Gates Ticketed -> Departed. FIT just records the result; UNFIT cancels the whole Applicant + Placement via the same cascade as cancel_applicant. Blocked (417) once the Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-1).",
         "x-roles": [
           "Write access to the Placement"
         ],
@@ -3700,7 +3700,7 @@
           "Placement"
         ],
         "summary": "Record ticket number/flight date, auto-logs cost as an expense",
-        "description": "ticket_cost (if given) auto-creates a Pending Applicant Transaction expense.",
+        "description": "ticket_cost (if given) auto-creates a Pending Applicant Transaction expense. Blocked (417) once the Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-1).",
         "x-roles": [
           "Ticketer",
           "Write access to the Placement"
