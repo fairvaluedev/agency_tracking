@@ -108,13 +108,21 @@ def transition(doc, new_status, actor=None, override=False, override_reason=None
 		)
 
 	gate = STAGE_GATES.get((current_status, new_status))
-	gate_passed = gate(doc) if gate else True
+	gate_result = gate(doc) if gate else True
+	gate_passed = gate_result is True
 	is_override = bool(gate) and not gate_passed
 
 	if is_override:
 		if not override:
+			# Gate functions may return a specific reason string instead of a bare False
+			# (mirrors validate_field_floor's specific field list) -- fall back to the gate
+			# function's own name/docstring when it doesn't, so the message is never fully
+			# generic even for older gates that haven't been updated to return a reason.
+			reason = gate_result if isinstance(gate_result, str) and gate_result else (
+				gate.__doc__.strip().splitlines()[0] if gate.__doc__ else gate.__name__
+			)
 			frappe.throw(
-				"'{0}' -> '{1}' is blocked: gate condition not met.".format(current_status, new_status),
+				"'{0}' -> '{1}' is blocked: {2}".format(current_status, new_status, reason),
 				frappe.ValidationError,
 			)
 		if not ({"Manager", "Admin"} & set(frappe.get_roles())):
@@ -162,14 +170,16 @@ def transition(doc, new_status, actor=None, override=False, override_reason=None
 	return doc
 
 
-def cv_generation_gate(applicant) -> bool:
+def cv_generation_gate(applicant):
 	"""Registered -> CV Generated (Part A.2 Stage 3): Standard track only.
 
 	2026-08-29: the Musaned gate (blocking CV generation for Saudi-bound Standard candidates
 	until musaned_status == ALTEYAZECHEM) and the musaned_status field itself have both been
 	removed per direct instruction -- Musaned tracking is no longer part of this system at all.
 	"""
-	return applicant.entry_track == "Standard"
+	if applicant.entry_track == "Standard":
+		return True
+	return f"only Standard-track applicants generate a CV (this applicant is {applicant.entry_track})."
 
 
 STAGE_GATES[("Registered", "CV Generated")] = cv_generation_gate
@@ -181,8 +191,13 @@ STAGE_GATES[("Registered", "CV Generated")] = cv_generation_gate
 # fail this one. "If this fails, the flight is cancelled and departure is blocked."
 
 
-def medical_2_gate(placement) -> bool:
-	return placement.medical_2_status == "FIT"
+def medical_2_gate(placement):
+	if placement.medical_2_status == "FIT":
+		return True
+	return (
+		f"pre-departure medical (Medical 2) status is '{placement.medical_2_status}', "
+		"must be FIT. Record it via placement_api.record_predeparture_medical_result."
+	)
 
 
 STAGE_GATES[("Ticketed", "Departed")] = medical_2_gate
@@ -196,8 +211,13 @@ STAGE_GATES[("Ticketed", "Departed")] = medical_2_gate
 # Applies uniformly to Standard (Saudi/Kuwait) and Muayena.
 
 
-def medical_selected_gate(placement) -> bool:
-	return placement.medical_selected_status == "FIT"
+def medical_selected_gate(placement):
+	if placement.medical_selected_status == "FIT":
+		return True
+	return (
+		f"medical (Selected stage) status is '{placement.medical_selected_status}', must be FIT. "
+		"Record it via placement_api.record_selected_medical_result."
+	)
 
 
 STAGE_GATES[("Selected", "Processing")] = medical_selected_gate
@@ -210,16 +230,36 @@ STAGE_GATES[("Selected", "Processing")] = medical_selected_gate
 CLEARANCE_STEP_DONE_STATUSES = {"Complete", "Issued", "Stamped"}
 
 
-def all_mandatory_clearance_steps_complete(placement) -> bool:
+def all_mandatory_clearance_steps_complete(placement):
 	steps = frappe.get_all(
 		"Clearance Step",
 		filters={"placement": placement.name, "is_mandatory": 1},
-		fields=["status"],
+		fields=["step_type", "status"],
 	)
-	return bool(steps) and all(s.status in CLEARANCE_STEP_DONE_STATUSES for s in steps)
+	if not steps:
+		return "no mandatory Clearance Steps exist yet for this Placement."
+	pending = [f"{s.step_type} ({s.status})" for s in steps if s.status not in CLEARANCE_STEP_DONE_STATUSES]
+	if pending:
+		return "mandatory Clearance Steps not yet complete: " + ", ".join(pending)
+	return True
 
 
 STAGE_GATES[("Processing", "Stamped")] = all_mandatory_clearance_steps_complete
+
+
+# --- Ticket-recorded gate (2026-08-30, backend-issues #05) ---
+# Nothing previously gated "Ticketed" on ticket data actually existing -- a placement could
+# reach Ticketed with ticket_number/flight_date both still null. Require a ticket_number so
+# "Ticketed" reliably means a ticket was recorded (placement_api.record_ticket_details).
+
+
+def ticket_recorded_gate(placement):
+	if placement.ticket_number:
+		return True
+	return "no ticket_number recorded yet. Call placement_api.record_ticket_details first."
+
+
+STAGE_GATES[("Stamped", "Ticketed")] = ticket_recorded_gate
 
 
 # --- Free-replacement window gate (Part A.4 / Step 10) ---
@@ -230,14 +270,19 @@ STAGE_GATES[("Processing", "Stamped")] = all_mandatory_clearance_steps_complete
 FREE_REPLACEMENT_WINDOW_DAYS = 90
 
 
-def within_free_replacement_window(complaint) -> bool:
+def within_free_replacement_window(complaint):
 	placement = frappe.get_doc("Placement", complaint.placement)
 	if not placement.departed_on:
-		return False
-	
+		return f"{placement.name} has no departed_on date recorded (never reached Departed)."
+
 	departed_on = get_datetime(placement.departed_on) if isinstance(placement.departed_on, str) else placement.departed_on
 	days_since_departure = (frappe.utils.now_datetime() - departed_on).days
-	return days_since_departure <= FREE_REPLACEMENT_WINDOW_DAYS
+	if days_since_departure <= FREE_REPLACEMENT_WINDOW_DAYS:
+		return True
+	return (
+		f"{days_since_departure} days have passed since departure, "
+		f"outside the {FREE_REPLACEMENT_WINDOW_DAYS}-day free-replacement window."
+	)
 
 
 STAGE_GATES[("Unresolved", "Returned - Free Replacement Required")] = within_free_replacement_window

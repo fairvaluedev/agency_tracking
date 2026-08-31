@@ -753,6 +753,46 @@
    "role": "Admin",
    "share": 1,
    "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Finance Manager"
+  },
+  {
+   "read": 1,
+   "role": "Clearance Officer"
+  },
+  {
+   "read": 1,
+   "role": "Complaint Manager"
+  },
+  {
+   "read": 1,
+   "role": "Communication Manager"
+  },
+  {
+   "read": 1,
+   "role": "Saudi LMIS"
+  },
+  {
+   "read": 1,
+   "role": "Saudi Taeshir"
+  },
+  {
+   "read": 1,
+   "role": "Saudi Embassy"
+  },
+  {
+   "read": 1,
+   "role": "Kuwait LMIS"
+  },
+  {
+   "read": 1,
+   "role": "Kuwait Telesign"
+  },
+  {
+   "read": 1,
+   "role": "Kuwait Embassy"
   }
  ],
  "search_fields": "full_name,passport_number,national_id,phone,destination_country",

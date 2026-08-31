@@ -1,6 +1,8 @@
 # Copyright (c) 2026, Agency and contributors
 # See license.txt
 
+import os
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
@@ -8,16 +10,29 @@ from agency_tracking.agency_tracking.tests.test_clearance_engine import saudi_se
 from agency_tracking.finance_api import (
 	approve_transaction,
 	create_commission_batch,
+	get_batch_invoice_pdf,
 	get_fx_rate,
 	log_stage_expense,
 	log_stage_income,
 	reject_transaction,
 	set_fx_rate,
 	settle_batch,
+	settle_batch_items,
 	trigger_early_commission_accrual,
+	upload_batch_payment_proof,
 	void_transaction,
 )
 from agency_tracking.finance_engine import record_fx_rate
+
+
+def write_names_csv(filename, names):
+	site_path = frappe.get_site_path("public", "files")
+	os.makedirs(site_path, exist_ok=True)
+	path = os.path.join(site_path, filename)
+	with open(path, "w", newline="", encoding="utf-8") as f:
+		for name in names:
+			f.write(f"{name}\n")
+	return f"/files/{filename}"
 
 
 def make_role_user(tag, role):
@@ -224,3 +239,79 @@ class TestFinanceAPI(FrappeTestCase):
 		frappe.set_user("Administrator")
 		settled = settle_batch(batch["name"], "BANK-REF-1")
 		self.assertEqual(settled["status"], "Settled")
+
+	def _two_item_batch(self, tag):
+		"""Two placements sharing one Contractor+country, each with an owed commission --
+		lets batch-level tests exercise partial (some items Paid, some Pending) settlement,
+		which a single-item batch can't distinguish from full settlement."""
+		from agency_tracking.agency_tracking.doctype.placement.test_placement import (
+			make_contractor,
+			registered_applicant,
+		)
+
+		record_fx_rate("USD", 55.0, frappe.utils.today())
+		contractor = make_contractor(tag, country="Saudi Arabia")
+		placements = []
+		for suffix in ("a", "b"):
+			applicant = registered_applicant(f"{tag}{suffix}", entry_track="Muayena", destination_country="Saudi Arabia")
+			placement = frappe.get_doc(
+				{
+					"doctype": "Placement",
+					"applicant": applicant.name,
+					"contractor": contractor.name,
+					"destination_country": "Saudi Arabia",
+					"status": "Selected",
+					"medical_selected_status": "FIT",
+					"manual_commission_amount": 300,
+					"manual_commission_currency": "USD",
+				}
+			).insert(ignore_permissions=True)
+			frappe.db.set_value("Applicant", applicant.name, "active_placement", placement.name)
+			trigger_early_commission_accrual(placement.name)
+			placements.append(placement)
+		batch = create_commission_batch(contractor.name, "Saudi Arabia")
+		return batch, placements
+
+	def test_settle_batch_items_marks_specific_items_paid_and_batch_partially_settled(self):
+		# backend-issues #09 (AGREED_SPEC.md Part 7.3): settle_batch (whole-batch) is joined by
+		# an explicit multi-select path -- a batch can now be partially paid.
+		batch, _ = self._two_item_batch("fa14")
+		self.assertEqual(len(batch["items"]), 2)
+		first_item = batch["items"][0]["name"]
+
+		officer = make_role_user("fa14", "Clearance Officer")
+		frappe.set_user(officer.name)
+		with self.assertRaises(frappe.PermissionError):
+			settle_batch_items([first_item])
+
+		frappe.set_user("Administrator")
+		result = settle_batch_items([first_item])
+		self.assertEqual(result["updated_items"], [first_item])
+
+		refreshed = frappe.get_doc("Commission Batch Request", batch["name"])
+		self.assertEqual(refreshed.status, "Partially Settled")
+
+	def test_upload_batch_payment_proof_matches_by_applicant_name(self):
+		batch, placements = self._two_item_batch("fa15")
+		matched_applicant = frappe.db.get_value("Placement", placements[0].name, "applicant")
+		matched_name = frappe.db.get_value("Applicant", matched_applicant, "full_name")
+
+		file_url = write_names_csv("fa15-paid.csv", [matched_name])
+		result = upload_batch_payment_proof(batch["name"], file_url)
+		self.assertEqual(len(result["matched_items"]), 1)
+
+		refreshed = frappe.get_doc("Commission Batch Request", batch["name"])
+		self.assertEqual(refreshed.status, "Partially Settled")
+
+	def test_get_batch_invoice_pdf_requires_finance_role(self):
+		batch, _ = self._two_item_batch("fa16")
+
+		officer = make_role_user("fa16", "Clearance Officer")
+		frappe.set_user(officer.name)
+		with self.assertRaises(frappe.PermissionError):
+			get_batch_invoice_pdf(batch["name"])
+
+		frappe.set_user("Administrator")
+		get_batch_invoice_pdf(batch["name"])
+		self.assertEqual(frappe.local.response.type, "pdf")
+		self.assertTrue(frappe.local.response.filecontent)

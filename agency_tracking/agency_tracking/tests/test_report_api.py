@@ -18,6 +18,7 @@ from agency_tracking.report_api import (
 	get_complaint_aging_report,
 	get_daily_work_report,
 	get_financial_overview,
+	get_operations_summary,
 	get_staff_performance_report,
 )
 
@@ -147,3 +148,27 @@ class TestReportAPI(FrappeTestCase):
 
 		report = get_financial_overview(REPORT_DATE, REPORT_DATE)
 		self.assertGreaterEqual(report["settled_in_period_birr"], 250 * 55.0)
+
+	def test_operations_summary_requires_management_role(self):
+		staff = make_role_user("rep09", "Registrar")
+		frappe.set_user(staff.name)
+		with self.assertRaises(frappe.PermissionError):
+			get_operations_summary(REPORT_DATE, REPORT_DATE)
+
+	def test_operations_summary_shape_and_counts(self):
+		from agency_tracking.agency_tracking.tests.test_state_machine import ticketed_placement
+
+		placement = ticketed_placement("rep10")
+		for event_name in frappe.get_all(
+			"Process Event", filters={"reference_doctype": "Placement", "reference_name": placement.name}, pluck="name"
+		):
+			frappe.db.set_value("Process Event", event_name, "creation", f"{REPORT_DATE} 09:00:00")
+		frappe.db.set_value("Placement", placement.name, "creation", f"{REPORT_DATE} 08:00:00")
+
+		report = get_operations_summary(REPORT_DATE, REPORT_DATE)
+		self.assertIn("applicant_funnel", report)
+		self.assertIn("placement_funnel", report)
+		self.assertGreaterEqual(report["placement_funnel"]["Ticketed"], 1)
+		self.assertGreaterEqual(report["conversion_rates"]["stamped_to_ticketed"], 0)
+		self.assertIsNotNone(report["turnaround_days"]["selected_to_ticketed"])
+		self.assertIn("placements_critical_not_departed", report["pending_overdue"])

@@ -48,6 +48,11 @@ def ticketed_placement(tag):
 	# clear the corridor's steps before advancing, same as clearance_engine tests do.
 	complete_all_clearance_steps(placement.name)
 	transition(placement, "Stamped")
+	# backend-issues #05: Stamped->Ticketed is now gated on a ticket_number actually being on
+	# file (state_machine.ticket_recorded_gate) — set it directly here rather than through
+	# placement_api.record_ticket_details, since these tests exercise transition() in isolation.
+	frappe.db.set_value("Placement", placement.name, "ticket_number", f"TK-{tag}")
+	placement.reload()
 	transition(placement, "Ticketed")
 	return placement
 

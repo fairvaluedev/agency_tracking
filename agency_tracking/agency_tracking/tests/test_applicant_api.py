@@ -4,9 +4,30 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from agency_tracking.applicant_api import log_applicant_fee, update_applicant_for_lmis
+from agency_tracking.applicant_api import (
+	create_applicant,
+	list_applicants,
+	list_country_bans,
+	log_applicant_fee,
+	remove_country_ban,
+	set_country_ban,
+	update_applicant,
+	update_applicant_for_lmis,
+)
 from agency_tracking.finance_api import approve_transaction
 from agency_tracking.state_machine import transition
+
+
+def make_role_user(tag, role):
+	return frappe.get_doc(
+		{
+			"doctype": "User",
+			"email": f"aa-{tag}@example.com",
+			"first_name": f"AA {tag}",
+			"send_welcome_email": 0,
+			"roles": [{"role": role}],
+		}
+	).insert(ignore_permissions=True)
 
 
 def standard_floor_without_lmis_fields(tag):
@@ -56,6 +77,28 @@ class TestApplicantAPI(FrappeTestCase):
 		self.assertFalse(doc.national_id)
 		self.assertFalse(doc.labor_id)
 		self.assertFalse(doc.emergency_contact_name)
+
+	def test_create_applicant_ignores_manual_passport_issue_date(self):
+		# backend-issues #04: passport_issue_date is derived (expiry - 5y) and read_only in
+		# applicant.json -- create_applicant must not let a caller-supplied value slip through
+		# and get silently clobbered a moment later by Applicant.calc_passport_issue_date.
+		result = create_applicant(
+			full_name="Passport Date Test",
+			entry_track="Standard",
+			gender="Female",
+			nationality="Ethiopia",
+			passport_expiry_date="2030-01-01",
+			passport_issue_date="1999-01-01",
+		)
+		self.assertEqual(result["passport_issue_date"], "2025-01-01")
+
+	def test_update_applicant_ignores_manual_passport_issue_date(self):
+		doc = registered_applicant_no_lmis_fields("aa14")
+		original_issue_date = doc.passport_issue_date
+
+		result = update_applicant(doc.name, passport_issue_date="1980-01-01")
+		self.assertEqual(result["passport_issue_date"], original_issue_date)
+		self.assertNotEqual(result["passport_issue_date"], "1980-01-01")
 
 	def test_update_applicant_for_lmis_sets_national_id_and_labor_id(self):
 		doc = registered_applicant_no_lmis_fields("aa02")
@@ -202,3 +245,63 @@ class TestApplicantAPI(FrappeTestCase):
 		doc.append("fee_log", {"description": "Placeholder, amount not entered yet"})
 		with self.assertRaises(frappe.MandatoryError):
 			doc.save(ignore_permissions=True)
+
+	def test_list_applicants_readable_by_finance_manager(self):
+		# backend-issues #02: Finance Manager had zero read access to Applicant via the
+		# frontend's old /api/resource/Applicant fallback -- this is the whitelisted
+		# replacement, and the doctype's own permissions now grant it read.
+		registered_applicant_no_lmis_fields("aa15")
+		finance_manager = make_role_user("aa15", "Finance Manager")
+		frappe.set_user(finance_manager.name)
+		result = list_applicants(filters={"passport_number": "EP-LMIS-aa15"})
+		self.assertEqual(len(result), 1)
+
+	def test_list_applicants_denied_for_foreign_agency(self):
+		registered_applicant_no_lmis_fields("aa16")
+		agency_user = make_role_user("aa16", "Foreign Agency")
+		frappe.set_user(agency_user.name)
+		with self.assertRaises(frappe.PermissionError):
+			list_applicants(filters={"passport_number": "EP-LMIS-aa16"})
+
+	def test_registrar_can_set_and_list_country_ban(self):
+		# backend-issues #08: Applicant Country Ban had no whitelisted writer anywhere -- the
+		# only way to set a ban was the raw /api/resource/Applicant Country Ban endpoint.
+		doc = registered_applicant_no_lmis_fields("aa17")
+		registrar = make_role_user("aa17", "Registrar")
+		frappe.set_user(registrar.name)
+
+		ban = set_country_ban(doc.name, "Kuwait", "Returned worker, complaint case CMP-TEST")
+		self.assertEqual(ban["applicant"], doc.name)
+		self.assertEqual(ban["set_by"], registrar.name)
+
+		bans = list_country_bans(applicant_name=doc.name)
+		self.assertEqual(len(bans), 1)
+
+	def test_set_country_ban_requires_reason(self):
+		doc = registered_applicant_no_lmis_fields("aa18")
+		with self.assertRaises(frappe.ValidationError):
+			set_country_ban(doc.name, "Kuwait", "")
+
+	def test_set_country_ban_blocks_duplicate(self):
+		doc = registered_applicant_no_lmis_fields("aa19")
+		set_country_ban(doc.name, "Kuwait", "First ban")
+		with self.assertRaises(frappe.ValidationError):
+			set_country_ban(doc.name, "Kuwait", "Second attempt")
+
+	def test_registrar_cannot_remove_country_ban(self):
+		doc = registered_applicant_no_lmis_fields("aa20")
+		ban = set_country_ban(doc.name, "Kuwait", "Some reason")
+
+		registrar = make_role_user("aa20", "Registrar")
+		frappe.set_user(registrar.name)
+		with self.assertRaises(frappe.PermissionError):
+			remove_country_ban(ban["name"])
+
+	def test_manager_can_remove_country_ban(self):
+		doc = registered_applicant_no_lmis_fields("aa21")
+		ban = set_country_ban(doc.name, "Kuwait", "Some reason")
+
+		manager = make_role_user("aa21", "Manager")
+		frappe.set_user(manager.name)
+		remove_country_ban(ban["name"])
+		self.assertFalse(frappe.db.exists("Applicant Country Ban", ban["name"]))

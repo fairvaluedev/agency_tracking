@@ -351,6 +351,87 @@ def get_placement_aging_report():
 
 
 @frappe.whitelist()
+def get_operations_summary(from_date, to_date):
+	"""Recruitment funnel + SLA/turnaround dashboard data (Manager/Admin), added on request
+	from the frontend integration pass (2026-08-31) alongside list_applicants/list_placements
+	(backend-issues #02). Funnel/stage counts are current-state snapshots (not time-boxed --
+	a funnel describes where everything sits *right now*); conversion rates and turnaround
+	times are computed from Process Event transitions that happened within from_date/to_date,
+	same pattern as get_daily_work_report/_transition_count above. Pending/overdue reuses the
+	same thresholds as get_placement_aging_report so the two never disagree."""
+	_require_management()
+
+	applicant_funnel = {
+		status: frappe.db.count("Applicant", filters={"status": status})
+		for status in ("Draft", "Registered", "CV Generated", "Cancelled")
+	}
+	placement_funnel = {
+		status: frappe.db.count("Placement", filters={"status": status})
+		for status in ("Selected", "Processing", "Stamped", "Ticketed", "Departed", "Cancelled")
+	}
+
+	registered_count = _transition_count("Registered", from_date, to_date, reference_doctype="Applicant")
+	cv_generated_count = _transition_count("CV Generated", from_date, to_date, reference_doctype="Applicant")
+	stamped_count = _transition_count("Stamped", from_date, to_date)
+	ticketed_count = _transition_count("Ticketed", from_date, to_date)
+	departed_count = _transition_count("Departed", from_date, to_date)
+
+	def _rate(numerator, denominator):
+		return round(numerator / denominator, 4) if denominator else None
+
+	conversion_rates = {
+		"registered_to_cv_generated": _rate(cv_generated_count, registered_count),
+		"stamped_to_ticketed": _rate(ticketed_count, stamped_count),
+		"ticketed_to_departed": _rate(departed_count, ticketed_count),
+	}
+
+	def _avg_turnaround_days(to_status, from_date, to_date):
+		"""Mean days between a Placement's creation and its first reaching to_status, for
+		every such transition recorded in the window -- a simple mean, not weighted/percentile;
+		good enough for a dashboard tile, not a substitute for the underlying event list."""
+		events = frappe.get_all(
+			"Process Event",
+			filters={
+				"reference_doctype": "Placement",
+				"to_status": to_status,
+				"creation": ["between", _day_range(from_date, to_date)],
+			},
+			fields=["reference_name", "creation"],
+		)
+		if not events:
+			return None
+		durations = []
+		for event in events:
+			placement_creation = frappe.db.get_value("Placement", event.reference_name, "creation")
+			if placement_creation:
+				durations.append((frappe.utils.get_datetime(event.creation) - frappe.utils.get_datetime(placement_creation)).days)
+		return round(sum(durations) / len(durations), 1) if durations else None
+
+	turnaround_days = {
+		"selected_to_ticketed": _avg_turnaround_days("Ticketed", from_date, to_date),
+		"selected_to_departed": _avg_turnaround_days("Departed", from_date, to_date),
+	}
+
+	aging = get_placement_aging_report()
+	pending_overdue = {
+		"placements_approaching_ticket_deadline": len(aging["approaching_ticket_deadline"]),
+		"placements_critical_not_departed": len(aging["critical_not_departed"]),
+		"complaints_unresolved": frappe.db.count("Complaint", filters={"status": "Unresolved"}),
+		"transactions_pending_approval": frappe.db.count("Applicant Transaction", filters={"status": "Pending"}),
+	}
+
+	return {
+		"from_date": from_date,
+		"to_date": to_date,
+		"applicant_funnel": applicant_funnel,
+		"placement_funnel": placement_funnel,
+		"conversion_rates": conversion_rates,
+		"turnaround_days": turnaround_days,
+		"pending_overdue": pending_overdue,
+	}
+
+
+@frappe.whitelist()
 def export_commissions_xlsx(contractor=None, destination_country=None, from_date=None, to_date=None):
 	"""Generates and streams binary .xlsx (or CSV fallback) of unpaid / all commission records."""
 	_require_management()

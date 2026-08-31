@@ -49,6 +49,10 @@ tags:
     description: Draft → Registered → CV Generated → Cancelled, cycle_number, country bans, passport OCR.
   - name: Placement & Corridor
     description: Selected → Processing → Stamped → Ticketed → Departed; contract/visa upload; ticketing.
+  - name: Document Parsing
+    description: Contract/visa/Injaz/passport OCR & PDF field extraction.
+  - name: Contractor
+    description: Foreign agency records and their portal logins.
   - name: Clearance Steps
     description: LMIS/Taeshir/Embassy/Telesign step actions — country-role-scoped.
   - name: Portal (Foreign Agency)
@@ -171,6 +175,56 @@ paths:
         "200": { description: Updated Applicant as_dict(). }
         "403": { description: Banned from the given destination_country and override_ban not set, or override attempted by a non-Manager/Admin. }
 
+  /api/method/agency_tracking.applicant_api.log_applicant_fee:
+    post:
+      tags: [Applicant Lifecycle]
+      summary: Manual "Log Fee" button path — flips fee_status to Paid
+      description: >
+        Any internal staff role. The actual ledger-entry creation lives in
+        Applicant.maybe_log_fee_transaction (before_save) — a direct Desk edit setting
+        fee_status=Paid gets identical behavior without going through this endpoint at all.
+        fee_required and registration_fee_amount must already be set; throws if the fee was
+        already logged (fee_transaction already set).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { applicant_name: { type: string } }
+              required: [applicant_name]
+      responses:
+        "200": { description: Updated Applicant as_dict(), fee_status=Paid. }
+        "417": { description: fee_required/registration_fee_amount not set, or fee already logged. }
+
+  /api/method/agency_tracking.applicant_api.update_applicant_for_lmis:
+    post:
+      tags: [Applicant Lifecycle]
+      summary: Narrow LMIS-stage edit surface
+      description: >
+        Only exam_date, coc_status, labor_id, national_id, emergency_contact_name,
+        emergency_contact_phone, emergency_contact_address are applied — any other key in the
+        payload is silently ignored (2026-08-29 correction: these fields are deliberately not
+        part of the Registered field floor, captured here once the candidate actually reaches
+        the LMIS clearance step). Restricted to Saudi LMIS/Kuwait LMIS/Manager/Admin.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                applicant_name: { type: string }
+                exam_date: { type: string, format: date }
+                coc_status: { type: string }
+                labor_id: { type: string }
+                national_id: { type: string }
+                emergency_contact_name: { type: string }
+                emergency_contact_phone: { type: string }
+                emergency_contact_address: { type: string }
+              required: [applicant_name]
+              additionalProperties: true
+      responses:
+        "200": { description: Updated Applicant as_dict(). }
+
   /api/method/agency_tracking.applicant_api.cancel_applicant:
     post:
       tags: [Applicant Lifecycle]
@@ -231,6 +285,199 @@ paths:
         - { name: applicant_name, in: query, required: true, schema: { type: string } }
       responses:
         "200": { description: Applicant as_dict(). }
+
+  /api/method/agency_tracking.applicant_api.list_applicants:
+    post:
+      tags: [Applicant Lifecycle]
+      summary: List Applicants the caller's role can read
+      description: >
+        backend-issues #02: whitelisted replacement for the raw /api/resource/Applicant
+        fallback, which 403'd for every role except Registrar/Manager/Admin/System Manager.
+        Enforces the doctype's own permissions via frappe.get_list — now also granted
+        read-only to Finance Manager, Clearance Officer, Complaint Manager, Communication
+        Manager, and the six country+step roles.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filters: { type: object, description: Frappe filter dict or list. }
+                limit_page_length: { type: integer, default: 100 }
+                order_by: { type: string, default: "modified desc" }
+      responses:
+        "200": { description: Array of Applicant dicts. }
+        "403": { description: Not permitted (doctype has no read grant for this role). }
+
+  # --- Contractor ---
+  /api/method/agency_tracking.contractor_api.create_contractor:
+    post:
+      tags: [Contractor]
+      summary: Register a new foreign agency and its portal login
+      description: >
+        backend-issues #07: Contractor.user is a required, unique Link, so there was
+        previously no whitelisted way to create one -- create_muayena_placement's
+        contractor_name is a strict Link to an existing Contractor record. Manager/Admin/
+        Finance Manager/Registrar only.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contractor_name: { type: string }
+                country: { type: string }
+                user_email: { type: string }
+                user_first_name: { type: string }
+                communication_manager: { type: string }
+              required: [contractor_name, country, user_email, user_first_name]
+      responses:
+        "200": { description: New Contractor as_dict(). }
+
+  /api/method/agency_tracking.contractor_api.list_contractors:
+    post:
+      tags: [Contractor]
+      summary: List Contractors the caller's role can manage
+      description: Manager/Admin/Finance Manager/Registrar only.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filters: { type: object }
+                limit_page_length: { type: integer, default: 100 }
+      responses:
+        "200": { description: Array of Contractor dicts. }
+
+  /api/method/agency_tracking.applicant_api.set_country_ban:
+    post:
+      tags: [Applicant Lifecycle]
+      summary: Set a permanent per-(Applicant, Country) ban ("Ashara Teyezuwal")
+      description: >
+        backend-issues #08: previously no whitelisted writer existed for Applicant Country
+        Ban -- the only way to set one was the raw /api/resource/Applicant Country Ban
+        endpoint. Doctype permissions already grant create to Registrar/Complaint Manager/
+        Manager/Admin/System Manager.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                applicant_name: { type: string }
+                country: { type: string }
+                reason: { type: string }
+              required: [applicant_name, country, reason]
+      responses:
+        "200": { description: New Applicant Country Ban as_dict(). }
+
+  /api/method/agency_tracking.applicant_api.list_country_bans:
+    post:
+      tags: [Applicant Lifecycle]
+      summary: List country bans, optionally scoped to one Applicant
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                applicant_name: { type: string }
+      responses:
+        "200": { description: Array of Applicant Country Ban dicts. }
+
+  /api/method/agency_tracking.applicant_api.remove_country_ban:
+    post:
+      tags: [Applicant Lifecycle]
+      summary: Lift a country ban
+      description: >
+        Delete permission on Applicant Country Ban is Manager/Admin/System Manager only --
+        Registrar/Complaint Manager can set a ban but not lift one.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ban_name: { type: string }
+              required: [ban_name]
+      responses:
+        "200": { description: "{deleted: ban_name}" }
+
+  # --- Document Parsing ---
+  /api/method/agency_tracking.contract_parser.parse_contract_file:
+    post:
+      tags: [Document Parsing]
+      summary: Extract structured fields from an uploaded contract
+      description: >
+        Saudi: contract#/visa#/employer/agency/salary. Kuwait: employer/site/duration/salary
+        only (its template carries far less). Returns mock fixture data instead of real OCR
+        when Document Parsing Settings.use_mock_parsing is on. Called internally by
+        placement_api.upload_contract/create_muayena_placement -- not typically called
+        directly by the frontend.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file_url: { type: string }
+                destination_country: { type: string, enum: ["Saudi Arabia", Kuwait] }
+              required: [file_url]
+      responses:
+        "200": { description: Dict of extracted Placement field updates. }
+
+  /api/method/agency_tracking.contract_parser.parse_visa_file:
+    post:
+      tags: [Document Parsing]
+      summary: Extract fields from a Kuwait eVisa document
+      description: >
+        visa_number/type/dates/reference, sponsor name+civil ID, Kuwait agency name+license.
+        Called internally by placement_api.upload_visa.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file_url: { type: string }
+              required: [file_url]
+      responses:
+        "200": { description: Dict of extracted Placement field updates. }
+
+  /api/method/agency_tracking.contract_parser.parse_injaz_file:
+    post:
+      tags: [Document Parsing]
+      summary: Extract fields from a Saudi Injaz paper
+      description: Injaz application number, passport number, applicant demographics, origin agency.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file_url: { type: string }
+              required: [file_url]
+      responses:
+        "200": { description: Dict of extracted fields. }
+
+  /api/method/agency_tracking.passport_parser.parse_passport_file:
+    post:
+      tags: [Document Parsing]
+      summary: Extract MRZ fields from a passport scan
+      description: >
+        ICAO 9303 checksum self-correcting MRZ parser (TD3/TD1), falls back to visual OCR.
+        Never raises -- returns {} on failure.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file_url: { type: string }
+              required: [file_url]
+      responses:
+        "200": { description: Dict of extracted Applicant field updates (possibly empty). }
 
   # --- Placement & Corridor ---
   /api/method/agency_tracking.placement_api.upload_contract:
@@ -315,6 +562,51 @@ paths:
               required: [placement_name, status]
       responses:
         "200": { description: Updated Placement as_dict() (or the resulting Cancelled Applicant's cascade, if UNFIT). }
+
+  /api/method/agency_tracking.placement_api.record_predeparture_medical_result:
+    post:
+      tags: [Placement & Corridor]
+      summary: Pre-departure (Medical 2) checkpoint (gates Ticketed → Departed)
+      description: >
+        backend-issues #01: this was previously impossible to satisfy — medical_2_status had
+        no whitelisted writer anywhere, so no Placement could ever legally reach Departed.
+        Mirrors record_selected_medical_result's shape: FIT records the result; UNFIT cancels
+        the whole Applicant + Placement via the same cascade as cancel_applicant.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                placement_name: { type: string }
+                status: { type: string, enum: [FIT, UNFIT] }
+                examination_date: { type: string, format: date }
+              required: [placement_name, status]
+      responses:
+        "200": { description: Updated Placement as_dict() (or the resulting Cancelled Applicant's cascade, if UNFIT). }
+
+  /api/method/agency_tracking.placement_api.list_placements:
+    post:
+      tags: [Placement & Corridor]
+      summary: List Placements the caller's role can read
+      description: >
+        backend-issues #02: whitelisted replacement for the raw /api/resource/Placement
+        fallback, which 403'd for every role except Manager/Admin/System Manager/Contract
+        Parser/Ticketer. Enforces the doctype's own permissions via frappe.get_list — now also
+        granted read-only to Finance Manager, Clearance Officer, Complaint Manager,
+        Communication Manager, and the six country+step roles.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filters: { type: object, description: Frappe filter dict or list. }
+                limit_page_length: { type: integer, default: 100 }
+                order_by: { type: string, default: "modified desc" }
+      responses:
+        "200": { description: Array of Placement dicts. }
+        "403": { description: Not permitted (doctype has no read grant for this role). }
 
   /api/method/agency_tracking.placement_api.advance_placement:
     post:
@@ -554,7 +846,6 @@ paths:
                 description: { type: string }
                 placement: { type: string }
                 stage_logged_at: { type: string }
-                receipt_image: { type: string, description: URL from upload_receipt. }
               required: [amount, currency, description]
       responses:
         "200": { description: New Applicant Transaction as_dict(), status Pending. }
@@ -575,28 +866,9 @@ paths:
                 description: { type: string }
                 placement: { type: string }
                 stage_logged_at: { type: string }
-                receipt_image: { type: string }
               required: [amount, currency, description]
       responses:
         "200": { description: New Applicant Transaction as_dict(), status Pending. }
-
-  /api/method/agency_tracking.finance_api.upload_receipt:
-    post:
-      tags: [Finance]
-      summary: Upload a receipt image to Cloudflare R2
-      description: Pass the returned receipt_image URL into log_stage_expense/log_stage_income.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                applicant_name: { type: string }
-                file_url: { type: string, description: From /api/method/upload_file. }
-              required: [applicant_name, file_url]
-      responses:
-        "200": { description: "{ receipt_image: <R2 URL> }" }
-        "400": { description: Storage Settings not configured yet. }
 
   /api/method/agency_tracking.finance_api.approve_transaction:
     post:
@@ -687,29 +959,6 @@ paths:
       responses:
         "200": { description: "{ fx_rate }" }
 
-  /api/method/agency_tracking.finance_api.get_fx_settings:
-    get:
-      tags: [Finance]
-      summary: Get the Global/Custom FX mode + fetch interval
-      responses:
-        "200": { description: "{ mode, fetch_interval, last_fetched_at }" }
-
-  /api/method/agency_tracking.finance_api.set_fx_settings:
-    post:
-      tags: [Finance]
-      summary: Switch FX mode (Global auto-fetch vs Custom manual)
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                mode: { type: string, enum: [Global, Custom] }
-                fetch_interval: { type: string, enum: ["1 Hour", "3 Hours", "6 Hours", Daily] }
-              required: [mode]
-      responses:
-        "200": { description: "{ mode, fetch_interval }" }
-
   /api/method/agency_tracking.finance_api.get_owed_commissions:
     get:
       tags: [Finance]
@@ -756,14 +1005,20 @@ paths:
         "200": { description: Updated Commission Batch Request as_dict(), status Settled. }
 
   /api/method/agency_tracking.finance_api.get_batch_invoice_pdf:
-    get:
+    post:
       tags: [Finance]
       summary: On-demand commission batch invoice PDF (applicant names + amounts)
-      description: Rendered fresh on every call, never pre-generated/stored.
-      parameters:
-        - { name: batch_name, in: query, required: true, schema: { type: string } }
+      description: Rendered fresh on every call, never pre-generated/stored. Finance Manager/Admin only.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                batch_name: { type: string }
+              required: [batch_name]
       responses:
-        "200": { description: PDF bytes. }
+        "200": { description: Binary PDF stream (application/pdf). }
 
   /api/method/agency_tracking.finance_api.upload_batch_payment_proof:
     post:
@@ -931,6 +1186,27 @@ paths:
         "200": { description: "{ status: reminder sent }" }
 
   # --- Chat ---
+  /api/method/agency_tracking.chat_engine.get_placement_officers:
+    post:
+      tags: [Chat]
+      summary: List which officer is currently assigned to each Clearance Step on a Placement
+      description: >
+        Sourced from the same open ToDo assignment data that drives Clearance Step permissions
+        -- every Placement detail view exposes who's currently working each step. Requires
+        read access to the Placement (placement_name is a guessable, sequential-looking ID,
+        not treated as a secret).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                placement_name: { type: string }
+              required: [placement_name]
+      responses:
+        "200":
+          description: Array of { step_type, user, full_name }.
+
   /api/method/agency_tracking.chat_api.create_agency_thread:
     post:
       tags: [Chat]
@@ -1065,6 +1341,62 @@ paths:
       responses:
         "200": { description: Report object. }
 
+  /api/method/agency_tracking.report_api.get_operations_summary:
+    post:
+      tags: [Reports]
+      summary: Recruitment funnel + SLA/turnaround dashboard data — Manager/Admin
+      description: >
+        applicant_funnel/placement_funnel are current-state snapshot counts keyed by status.
+        conversion_rates and turnaround_days are computed from Process Event transitions that
+        happened within from_date/to_date. pending_overdue reuses get_placement_aging_report's
+        thresholds plus unresolved-complaint and pending-transaction counts.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from_date: { type: string, format: date }
+                to_date: { type: string, format: date }
+              required: [from_date, to_date]
+      responses:
+        "200":
+          description: Report object.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: object
+                    properties:
+                      from_date: { type: string }
+                      to_date: { type: string }
+                      applicant_funnel:
+                        type: object
+                        description: "Keys: Draft, Registered, CV Generated, Cancelled."
+                      placement_funnel:
+                        type: object
+                        description: "Keys: Selected, Processing, Stamped, Ticketed, Departed, Cancelled."
+                      conversion_rates:
+                        type: object
+                        properties:
+                          registered_to_cv_generated: { type: number, nullable: true }
+                          stamped_to_ticketed: { type: number, nullable: true }
+                          ticketed_to_departed: { type: number, nullable: true }
+                      turnaround_days:
+                        type: object
+                        properties:
+                          selected_to_ticketed: { type: number, nullable: true }
+                          selected_to_departed: { type: number, nullable: true }
+                      pending_overdue:
+                        type: object
+                        properties:
+                          placements_approaching_ticket_deadline: { type: integer }
+                          placements_critical_not_departed: { type: integer }
+                          complaints_unresolved: { type: integer }
+                          transactions_pending_approval: { type: integer }
+
   /api/method/agency_tracking.report_api.get_pending_approval_queue:
     get:
       tags: [Reports]
@@ -1100,6 +1432,24 @@ paths:
       description: Manager/Admin. Distinct from the automatic contract_age_watchdog push notification — this is a pull/list view.
       responses:
         "200": { description: "{ approaching_ticket_deadline: [...], critical_not_departed: [...] }" }
+
+  /api/method/agency_tracking.report_api.export_commissions_xlsx:
+    post:
+      tags: [Reports]
+      summary: Download commission transactions as .xlsx (CSV fallback if xlsxwriter unavailable)
+      description: Manager/Admin. All filters optional -- omit contractor/destination_country/from_date/to_date for every Commission transaction on file.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contractor: { type: string }
+                destination_country: { type: string }
+                from_date: { type: string, format: date }
+                to_date: { type: string, format: date }
+      responses:
+        "200": { description: Binary .xlsx (or .csv fallback) stream, Content-Disposition attachment. }
 
   # --- Corridor Config ---
   /api/method/agency_tracking.corridor_engine.get_corridor_steps:

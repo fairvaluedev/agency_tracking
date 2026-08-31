@@ -80,6 +80,14 @@
       "description": "Contract upload, medical gates, ticketing, the Selected -> Departed pipeline"
     },
     {
+      "name": "Contractor",
+      "description": "Foreign agency records and their portal logins"
+    },
+    {
+      "name": "Reports",
+      "description": "Management/Admin visibility — daily/staff/financial/aging/operations reports"
+    },
+    {
       "name": "Clearance Steps",
       "description": "The generic, data-driven corridor clearance engine (LMIS/Taeshir/Embassy/Telesign, both countries)"
     },
@@ -285,6 +293,228 @@
           },
           "417": {
             "description": "Validation error (business rule violated)"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/method/agency_tracking.applicant_api.list_applicants": {
+      "post": {
+        "tags": [
+          "Applicant Lifecycle"
+        ],
+        "summary": "List Applicants the caller's role can read",
+        "description": "backend-issues #02: whitelisted replacement for the raw /api/resource/Applicant fallback. Enforces the doctype's own permissions (Registrar, Manager, Admin, System Manager, Finance Manager, Clearance Officer, Complaint Manager, Communication Manager, and the six country+step roles).",
+        "x-roles": [
+          "Read access to the Applicant"
+        ],
+        "consumes": [
+          "application/x-www-form-urlencoded",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "filters",
+            "in": "formData",
+            "type": "string",
+            "required": false,
+            "description": "JSON-encoded dict or list of Frappe filter conditions."
+          },
+          {
+            "name": "limit_page_length",
+            "in": "formData",
+            "type": "integer",
+            "required": false,
+            "default": 100
+          },
+          {
+            "name": "order_by",
+            "in": "formData",
+            "type": "string",
+            "required": false,
+            "default": "modified desc"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted (role/permission check failed)"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/method/agency_tracking.applicant_api.set_country_ban": {
+      "post": {
+        "tags": [
+          "Applicant Lifecycle"
+        ],
+        "summary": "Set a permanent per-(Applicant, Country) ban",
+        "description": "backend-issues #08: previously no whitelisted writer existed for Applicant Country Ban -- the doctype's own permissions already grant create to Registrar/Complaint Manager/Manager/Admin/System Manager.",
+        "x-roles": [
+          "Registrar",
+          "Complaint Manager",
+          "Manager",
+          "Admin"
+        ],
+        "consumes": [
+          "application/x-www-form-urlencoded",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "applicant_name",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "country",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "reason",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted (role/permission check failed)"
+          },
+          "417": {
+            "description": "Validation error (business rule violated)"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/method/agency_tracking.applicant_api.list_country_bans": {
+      "post": {
+        "tags": [
+          "Applicant Lifecycle"
+        ],
+        "summary": "List country bans, optionally scoped to one Applicant",
+        "x-roles": [
+          "Registrar",
+          "Complaint Manager",
+          "Manager",
+          "Admin"
+        ],
+        "consumes": [
+          "application/x-www-form-urlencoded",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "applicant_name",
+            "in": "formData",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted (role/permission check failed)"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/method/agency_tracking.applicant_api.remove_country_ban": {
+      "post": {
+        "tags": [
+          "Applicant Lifecycle"
+        ],
+        "summary": "Lift a country ban",
+        "description": "Delete permission on Applicant Country Ban is Manager/Admin/System Manager only -- Registrar/Complaint Manager can set a ban but not lift one.",
+        "x-roles": [
+          "Manager",
+          "Admin"
+        ],
+        "consumes": [
+          "application/x-www-form-urlencoded",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "ban_name",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted (role/permission check failed)"
           }
         },
         "security": [
@@ -684,6 +914,59 @@
           },
           "417": {
             "description": "Validation error (business rule violated)"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/method/agency_tracking.chat_engine.get_placement_officers": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "List which officer is currently assigned to each Clearance Step on a Placement",
+        "description": "Sourced from the same open ToDo assignment data that drives Clearance Step permissions -- every Placement detail view exposes who's currently working each step.",
+        "x-roles": [
+          "Read access to the Placement"
+        ],
+        "consumes": [
+          "application/x-www-form-urlencoded",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "placement_name",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "step_type": { "type": "string" },
+                      "user": { "type": "string" },
+                      "full_name": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted (role/permission check failed)"
           }
         },
         "security": [
@@ -2432,6 +2715,149 @@
         ]
       }
     },
+    "/api/method/agency_tracking.finance_api.settle_batch_items": {
+      "post": {
+        "tags": [
+          "Finance"
+        ],
+        "summary": "Mark specific Commission Batch Items paid (partial settlement)",
+        "description": "AGREED_SPEC.md Part 7.3 (backend-issues #09): explicit multi-select manual settlement, alongside upload_batch_payment_proof's parser. Batch status becomes Partially Settled until every item is Paid.",
+        "x-roles": [
+          "Finance Manager",
+          "Admin"
+        ],
+        "consumes": [
+          "application/x-www-form-urlencoded",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "item_names",
+            "in": "formData",
+            "type": "string",
+            "required": true,
+            "description": "JSON-encoded list of Commission Batch Item child row names."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted (role/permission check failed)"
+          },
+          "417": {
+            "description": "Validation error (business rule violated)"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/method/agency_tracking.finance_api.upload_batch_payment_proof": {
+      "post": {
+        "tags": [
+          "Finance"
+        ],
+        "summary": "Upload a paid-applicants list (CSV or PDF) and fuzzy-match against a batch",
+        "description": "AGREED_SPEC.md Part 7.3 (backend-issues #09): best-effort parse + fuzzy name match against the batch's own item list. Unmatched names stay Pending for manual settle_batch_items review -- never blocks.",
+        "x-roles": [
+          "Finance Manager",
+          "Admin"
+        ],
+        "consumes": [
+          "application/x-www-form-urlencoded",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "batch_name",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "file_url",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted (role/permission check failed)"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/method/agency_tracking.finance_api.get_batch_invoice_pdf": {
+      "post": {
+        "tags": [
+          "Finance"
+        ],
+        "summary": "Render a Commission Batch invoice PDF on demand",
+        "description": "AGREED_SPEC.md Part 7.3 (backend-issues #09): applicant names + amounts, built fresh whenever requested, not pre-generated/stored at batch creation.",
+        "x-roles": [
+          "Finance Manager",
+          "Admin"
+        ],
+        "consumes": [
+          "application/x-www-form-urlencoded",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "batch_name",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Binary PDF stream (application/pdf).",
+            "schema": {
+              "type": "file"
+            }
+          },
+          "403": {
+            "description": "Not permitted (role/permission check failed)"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
     "/api/method/agency_tracking.finance_api.settle_batch": {
       "post": {
         "tags": [
@@ -2789,6 +3215,140 @@
         ]
       }
     },
+    "/api/method/agency_tracking.contractor_api.create_contractor": {
+      "post": {
+        "tags": [
+          "Contractor"
+        ],
+        "summary": "Register a new foreign agency and its portal login",
+        "description": "backend-issues #07: Contractor.user is a required, unique Link, so there was previously no whitelisted way to create one -- Muayena placement creation (create_muayena_placement's contractor_name) is unusable without a Contractor to point at.",
+        "x-roles": [
+          "Manager",
+          "Admin",
+          "Finance Manager",
+          "Registrar"
+        ],
+        "consumes": [
+          "application/x-www-form-urlencoded",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "contractor_name",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "country",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "user_email",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "user_first_name",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "communication_manager",
+            "in": "formData",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted (role/permission check failed)"
+          },
+          "417": {
+            "description": "Validation error (business rule violated)"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/method/agency_tracking.contractor_api.list_contractors": {
+      "post": {
+        "tags": [
+          "Contractor"
+        ],
+        "summary": "List Contractors the caller's role can manage",
+        "description": "backend-issues #07: read surface for picking an existing agency (create_muayena_placement's contractor_name, Finance's batching/rate lookups).",
+        "x-roles": [
+          "Manager",
+          "Admin",
+          "Finance Manager",
+          "Registrar"
+        ],
+        "consumes": [
+          "application/x-www-form-urlencoded",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "filters",
+            "in": "formData",
+            "type": "string",
+            "required": false,
+            "description": "JSON-encoded dict or list of Frappe filter conditions."
+          },
+          {
+            "name": "limit_page_length",
+            "in": "formData",
+            "type": "integer",
+            "required": false,
+            "default": 100
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted (role/permission check failed)"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
     "/api/method/agency_tracking.placement_api.advance_placement": {
       "post": {
         "tags": [
@@ -3070,6 +3630,70 @@
         ]
       }
     },
+    "/api/method/agency_tracking.placement_api.record_predeparture_medical_result": {
+      "post": {
+        "tags": [
+          "Placement"
+        ],
+        "summary": "Record the pre-departure (Medical 2) result",
+        "description": "Gates Ticketed -> Departed. FIT just records the result; UNFIT cancels the whole Applicant + Placement via the same cascade as cancel_applicant.",
+        "x-roles": [
+          "Write access to the Placement"
+        ],
+        "consumes": [
+          "application/x-www-form-urlencoded",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "placement_name",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "status",
+            "in": "formData",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "FIT",
+              "UNFIT"
+            ]
+          },
+          {
+            "name": "examination_date",
+            "in": "formData",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted (role/permission check failed)"
+          },
+          "417": {
+            "description": "Validation error (business rule violated)"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
     "/api/method/agency_tracking.placement_api.record_ticket_details": {
       "post": {
         "tags": [
@@ -3249,6 +3873,69 @@
           },
           "417": {
             "description": "Validation error (business rule violated)"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/method/agency_tracking.placement_api.list_placements": {
+      "post": {
+        "tags": [
+          "Placement"
+        ],
+        "summary": "List Placements the caller's role can read",
+        "description": "backend-issues #02: whitelisted replacement for the raw /api/resource/Placement fallback. Enforces the doctype's own permissions (Manager, Admin, System Manager, Contract Parser, Ticketer, Finance Manager, Clearance Officer, Complaint Manager, Communication Manager, and the six country+step roles).",
+        "x-roles": [
+          "Read access to the Placement"
+        ],
+        "consumes": [
+          "application/x-www-form-urlencoded",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "filters",
+            "in": "formData",
+            "type": "string",
+            "required": false,
+            "description": "JSON-encoded dict or list of Frappe filter conditions."
+          },
+          {
+            "name": "limit_page_length",
+            "in": "formData",
+            "type": "integer",
+            "required": false,
+            "default": 100
+          },
+          {
+            "name": "order_by",
+            "in": "formData",
+            "type": "string",
+            "required": false,
+            "default": "modified desc"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted (role/permission check failed)"
           }
         },
         "security": [
@@ -3661,6 +4348,68 @@
         ]
       }
     },
+    "/api/method/agency_tracking.report_api.get_daily_work_report": {
+      "post": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "CVs created, medicals processed, clearances issued, embassies cleared, tickets booked, departures — for a date range",
+        "description": "business-workflow-srs.md Part 8's exact list.",
+        "x-roles": [
+          "Manager",
+          "Admin"
+        ],
+        "consumes": [
+          "application/x-www-form-urlencoded",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "from_date",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "to_date",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "object",
+                  "properties": {
+                    "from_date": { "type": "string" },
+                    "to_date": { "type": "string" },
+                    "cvs_created": { "type": "integer" },
+                    "medicals_processed": { "type": "integer" },
+                    "clearances_issued": { "type": "integer" },
+                    "embassies_cleared": { "type": "integer" },
+                    "tickets_booked": { "type": "integer" },
+                    "departures_confirmed": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted (role/permission check failed)"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
     "/api/method/agency_tracking.report_api.get_employee_financial_report": {
       "post": {
         "tags": [
@@ -3715,6 +4464,160 @@
         ]
       }
     },
+    "/api/method/agency_tracking.report_api.get_financial_overview": {
+      "post": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Income/expense/commission/refund totals + outstanding/settled",
+        "description": "Deliberately Admin-only, not Manager, unlike every other report here -- the financial-visibility wall from Step 8 applies to reporting too, not just the raw ledger.",
+        "x-roles": [
+          "Admin"
+        ],
+        "consumes": [
+          "application/x-www-form-urlencoded",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "from_date",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "to_date",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "object",
+                  "properties": {
+                    "from_date": { "type": "string" },
+                    "to_date": { "type": "string" },
+                    "totals_birr": {
+                      "type": "object",
+                      "properties": {
+                        "commission": { "type": "number" },
+                        "refund": { "type": "number" },
+                        "income": { "type": "number" },
+                        "expense": { "type": "number" }
+                      }
+                    },
+                    "outstanding_owed_birr": { "type": "number" },
+                    "settled_in_period_birr": { "type": "number" }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted (role/permission check failed)"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/method/agency_tracking.report_api.get_operations_summary": {
+      "post": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Recruitment funnel + SLA/turnaround dashboard data",
+        "description": "Manager/Admin only. applicant_funnel/placement_funnel are current-state snapshot counts; conversion_rates and turnaround_days are computed from Process Event transitions within from_date/to_date; pending_overdue reuses get_placement_aging_report's thresholds plus unresolved-complaint and pending-transaction counts.",
+        "x-roles": [
+          "Manager",
+          "Admin"
+        ],
+        "consumes": [
+          "application/x-www-form-urlencoded",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "from_date",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "to_date",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "object",
+                  "properties": {
+                    "from_date": { "type": "string" },
+                    "to_date": { "type": "string" },
+                    "applicant_funnel": {
+                      "type": "object",
+                      "description": "Current-state counts keyed by Applicant status: Draft, Registered, CV Generated, Cancelled."
+                    },
+                    "placement_funnel": {
+                      "type": "object",
+                      "description": "Current-state counts keyed by Placement status: Selected, Processing, Stamped, Ticketed, Departed, Cancelled."
+                    },
+                    "conversion_rates": {
+                      "type": "object",
+                      "properties": {
+                        "registered_to_cv_generated": { "type": "number", "nullable": true },
+                        "stamped_to_ticketed": { "type": "number", "nullable": true },
+                        "ticketed_to_departed": { "type": "number", "nullable": true }
+                      }
+                    },
+                    "turnaround_days": {
+                      "type": "object",
+                      "properties": {
+                        "selected_to_ticketed": { "type": "number", "nullable": true },
+                        "selected_to_departed": { "type": "number", "nullable": true }
+                      }
+                    },
+                    "pending_overdue": {
+                      "type": "object",
+                      "properties": {
+                        "placements_approaching_ticket_deadline": { "type": "integer" },
+                        "placements_critical_not_departed": { "type": "integer" },
+                        "complaints_unresolved": { "type": "integer" },
+                        "transactions_pending_approval": { "type": "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted (role/permission check failed)"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
     "/api/method/agency_tracking.report_api.get_pending_approval_queue": {
       "post": {
         "tags": [
@@ -3747,6 +4650,131 @@
           },
           "417": {
             "description": "Validation error (business rule violated)"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/method/agency_tracking.report_api.get_placement_aging_report": {
+      "post": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Placements approaching the ticket deadline, and critical ones not yet Departed",
+        "description": "Two buckets, both sorted worst-first (highest priority): approaching_ticket_deadline (25-29 days since contract_signed_date) and critical_not_departed (30+ days). Distinct from the contract_age_watchdog push notification -- this is a pull/list view.",
+        "x-roles": [
+          "Manager",
+          "Admin"
+        ],
+        "consumes": [
+          "application/x-www-form-urlencoded",
+          "application/json"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "object",
+                  "properties": {
+                    "approaching_ticket_deadline": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": { "type": "string" },
+                          "age_days": { "type": "integer" },
+                          "status": { "type": "string" }
+                        }
+                      }
+                    },
+                    "critical_not_departed": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": { "type": "string" },
+                          "age_days": { "type": "integer" },
+                          "status": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted (role/permission check failed)"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/method/agency_tracking.report_api.get_staff_performance_report": {
+      "post": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "get_daily_work_report's same breakdown, per individual staff member",
+        "description": "Grouped by whoever actually did the work (CV Record.generated_by, Clearance Step.completed_by, Process Event.actor for placement-stage transitions).",
+        "x-roles": [
+          "Manager",
+          "Admin"
+        ],
+        "consumes": [
+          "application/x-www-form-urlencoded",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "from_date",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "to_date",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "user": { "type": "string" },
+                      "cvs_created": { "type": "integer" },
+                      "clearances_completed": { "type": "integer" },
+                      "tickets_booked": { "type": "integer" },
+                      "departures_confirmed": { "type": "integer" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not permitted (role/permission check failed)"
           }
         },
         "security": [

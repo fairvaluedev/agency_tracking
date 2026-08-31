@@ -11,7 +11,10 @@ from agency_tracking.finance_engine import (
 	create_batch_request,
 	get_fx_rate as _get_fx_rate,
 	list_owed_commissions,
+	mark_batch_items_paid,
+	match_batch_payment_proof,
 	record_fx_rate,
+	render_batch_invoice_pdf,
 	settle_batch_request,
 )
 from agency_tracking.roles import INTERNAL_STAFF_ROLES
@@ -153,3 +156,37 @@ def settle_batch(batch_name, settlement_reference):
 	if not ({"Finance Manager", "Admin"} & set(frappe.get_roles())):
 		frappe.throw("Not permitted.", frappe.PermissionError)
 	return settle_batch_request(batch_name, settlement_reference).as_dict()
+
+
+@frappe.whitelist()
+def settle_batch_items(item_names):
+	"""AGREED_SPEC.md Part 7.3 (backend-issues #09): explicit multi-select manual settlement,
+	alongside upload_batch_payment_proof's best-effort parser -- marks specific Commission
+	Batch Item child rows Paid and syncs each affected batch's status (Partially Settled until
+	every item is Paid, then Settled)."""
+	if not ({"Finance Manager", "Admin"} & set(frappe.get_roles())):
+		frappe.throw("Not permitted.", frappe.PermissionError)
+	if isinstance(item_names, str):
+		item_names = frappe.parse_json(item_names)
+	return mark_batch_items_paid(item_names)
+
+
+@frappe.whitelist()
+def upload_batch_payment_proof(batch_name, file_url):
+	"""AGREED_SPEC.md Part 7.3 (backend-issues #09): parses a CSV or PDF listing paid applicant
+	names (best-effort), fuzzy-matches against this batch's own item list, marks matched items
+	Paid. Unmatched names stay Pending for manual settle_batch_items review -- never blocks."""
+	if not ({"Finance Manager", "Admin"} & set(frappe.get_roles())):
+		frappe.throw("Not permitted.", frappe.PermissionError)
+	return match_batch_payment_proof(batch_name, file_url)
+
+
+@frappe.whitelist()
+def get_batch_invoice_pdf(batch_name):
+	"""AGREED_SPEC.md Part 7.3 (backend-issues #09): on-demand PDF (applicant names + amounts),
+	built fresh whenever requested, not pre-generated/stored at batch creation."""
+	if not ({"Finance Manager", "Admin"} & set(frappe.get_roles())):
+		frappe.throw("Not permitted.", frappe.PermissionError)
+	frappe.local.response.filename = f"{batch_name}-invoice.pdf"
+	frappe.local.response.filecontent = render_batch_invoice_pdf(batch_name)
+	frappe.local.response.type = "pdf"

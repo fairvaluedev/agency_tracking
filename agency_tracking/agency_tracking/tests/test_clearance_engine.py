@@ -110,6 +110,8 @@ class TestClearanceEngine(FrappeTestCase):
 		)
 		self.assertTrue(ticket_todo)
 
+		frappe.db.set_value("Placement", placement.name, "ticket_number", "TK-ce03")
+		placement.reload()
 		transition(placement, "Ticketed")
 		departure_todos = frappe.get_all(
 			"ToDo",
@@ -136,6 +138,8 @@ class TestClearanceEngine(FrappeTestCase):
 		transition(placement, "Processing")
 		complete_all_clearance_steps(placement.name)
 		transition(placement, "Stamped")
+		frappe.db.set_value("Placement", placement.name, "ticket_number", "TK-ce06")
+		placement.reload()
 		transition(placement, "Ticketed")
 		frappe.db.set_value("Placement", placement.name, "medical_2_status", "FIT")
 		placement.reload()

@@ -157,6 +157,32 @@ def record_selected_medical_result(placement_name, status, examination_date=None
 
 
 @frappe.whitelist()
+def record_predeparture_medical_result(placement_name, status, examination_date=None):
+	"""Pre-departure medical checkpoint (~72h before flight, Part A.2 Stage 8 / Step 6): gates
+	Ticketed -> Departed (see state_machine.medical_2_gate). Mirrors
+	record_selected_medical_result's shape -- FIT just records the result and lets
+	advance_placement(new_status="Departed") pass the gate; UNFIT cancels the whole Applicant +
+	Placement via the same cascade, since a failed pre-departure medical this late (ticket
+	already purchased) has no forward path either, same as the earlier Selected-stage check."""
+	if status not in ("FIT", "UNFIT"):
+		frappe.throw("status must be 'FIT' or 'UNFIT'.", frappe.ValidationError)
+	placement = frappe.get_doc("Placement", placement_name)
+	if not placement.has_permission("write"):
+		frappe.throw("Not permitted.", frappe.PermissionError)
+
+	placement.medical_2_status = status
+	placement.medical_2_examination_date = examination_date
+	placement.save(ignore_permissions=True)
+
+	if status == "UNFIT":
+		from agency_tracking.applicant_api import cancel_applicant
+
+		cancel_applicant(placement.applicant, "Medical (pre-departure) result: UNFIT.")
+
+	return placement.as_dict()
+
+
+@frappe.whitelist()
 def advance_placement(placement_name, new_status, override_reason=None):
 	"""Move a Placement forward through its lifecycle via the sanctioned transition() path
 	(Part C). Passing override_reason attempts a Manager Override if the move is gate-blocked
@@ -180,7 +206,15 @@ def advance_placement(placement_name, new_status, override_reason=None):
 def record_ticket_details(placement_name, ticket_number, flight_date, ticket_cost=None, currency=None):
 	"""Ticketer role. ticket_cost (if given) auto-logs a Pending Applicant Transaction expense
 	-- same pattern as clearance-step payments, everything money-related feeds the one Finance
-	ledger."""
+	ledger.
+
+	2026-08-30 fix (backend-issues #05): ticket_number/flight_date are pure logistics fields with
+	no FX dependency -- the cost-logging sub-step now runs inside its own DB savepoint, so a
+	missing FX rate for `currency` only unwinds the failed expense insert, not the ticket fields
+	saved just above (which is the doc.save() call still pending in the same transaction, same
+	as it always was -- only the failure boundary changed). The cost log is best-effort from
+	here on: failure is reported back to the caller as a warning, not a fatal error for the
+	whole call."""
 	placement = frappe.get_doc("Placement", placement_name)
 	if not placement.has_permission("write"):
 		frappe.throw("Not permitted.", frappe.PermissionError)
@@ -190,13 +224,28 @@ def record_ticket_details(placement_name, ticket_number, flight_date, ticket_cos
 	placement.ticket_cost = ticket_cost
 	placement.save(ignore_permissions=True)
 
+	result = placement.as_dict()
 	if ticket_cost:
 		from agency_tracking.finance_api import _log_stage_transaction
 
-		_log_stage_transaction(
-			"Expense", ticket_cost, currency or "ETB", f"Ticket cost for {placement_name}", placement_name, None
-		)
-	return placement.as_dict()
+		save_point = frappe.generate_hash(length=10)
+		frappe.db.savepoint(save_point)
+		try:
+			_log_stage_transaction(
+				"Expense", ticket_cost, currency or "ETB", f"Ticket cost for {placement_name}", placement_name, None
+			)
+		except Exception:
+			frappe.db.rollback(save_point=save_point)
+			frappe.log_error(
+				title="Ticket cost logging failed",
+				message=f"{placement_name}: {frappe.get_traceback()}",
+			)
+			result["warning"] = (
+				f"Ticket saved, but the cost wasn't logged — ask Finance to set an FX rate for "
+				f"{currency or 'ETB'} (finance_api.set_fx_rate), then log it manually via "
+				f"finance_api.log_stage_expense."
+			)
+	return result
 
 
 @frappe.whitelist()
@@ -227,3 +276,23 @@ def record_reschedule(placement_name, reschedule_date, reschedule_cause, resched
 			None,
 		)
 	return placement.as_dict()
+
+
+@frappe.whitelist()
+def list_placements(filters=None, limit_page_length=100, order_by="modified desc"):
+	"""backend-issues #02: the whitelisted list surface Placement never had -- callers used to
+	fall back to raw /api/resource/Placement, which only Manager/Admin/System Manager/Contract
+	Parser/Ticketer could read (Placement's doctype-level permissions), 403ing every other role
+	that legitimately needs to resolve a placement reference (Finance Manager, Clearance Officer,
+	Complaint Manager, Communication Manager, the six country+step roles -- all granted read-only
+	access on the doctype itself, see placement.json). frappe.get_list enforces those permissions
+	the same way it would for any other doctype; no separate role check needed here."""
+	if isinstance(filters, str):
+		filters = frappe.parse_json(filters)
+	return frappe.get_list(
+		"Placement",
+		filters=filters,
+		fields=["*"],
+		limit_page_length=frappe.utils.cint(limit_page_length) or 100,
+		order_by=order_by,
+	)

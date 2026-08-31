@@ -20,6 +20,8 @@ def create_applicant(**data):
 	if not frappe.has_permission("Applicant", "create"):
 		frappe.throw("Not permitted.", frappe.PermissionError)
 	data = dict(data)
+	# passport_issue_date is read_only/derived -- see the matching drop in update_applicant.
+	data.pop("passport_issue_date", None)
 	data["doctype"] = "Applicant"
 	data["status"] = "Draft"
 	doc = frappe.get_doc(data).insert()
@@ -89,6 +91,11 @@ def update_applicant(applicant_name, override_ban=False, override_reason=None, *
 	data.pop("status", None)
 	data.pop("doctype", None)
 	data.pop("name", None)
+	# passport_issue_date is read_only in applicant.json (2026-08-29 correction: always derived
+	# as passport_expiry_date - 5y via Applicant.calc_passport_issue_date, never manually
+	# entered) -- dropped here, same as the structural fields above, rather than accepted and
+	# silently overwritten by that hook a moment later (backend-issues #04).
+	data.pop("passport_issue_date", None)
 
 	new_country = data.get("destination_country")
 	if new_country and new_country != doc.destination_country:
@@ -223,3 +230,68 @@ def get_applicant(applicant_name):
 	if not doc.has_permission("read"):
 		frappe.throw("Not permitted.", frappe.PermissionError)
 	return doc.as_dict()
+
+
+@frappe.whitelist()
+def list_applicants(filters=None, limit_page_length=100, order_by="modified desc"):
+	"""backend-issues #02: the whitelisted list surface Applicant never had -- callers used to
+	fall back to raw /api/resource/Applicant, which only Registrar/Manager/Admin/System Manager
+	could read (Applicant's doctype-level permissions), 403ing every other role that legitimately
+	needs to resolve an applicant name reference (Finance Manager, Clearance Officer, Complaint
+	Manager, Communication Manager, the six country+step roles -- all granted read-only access on
+	the doctype itself, see applicant.json). frappe.get_list enforces those permissions the same
+	way it would for any other doctype; no separate role check needed here."""
+	if isinstance(filters, str):
+		filters = frappe.parse_json(filters)
+	return frappe.get_list(
+		"Applicant",
+		filters=filters,
+		fields=["*"],
+		limit_page_length=frappe.utils.cint(limit_page_length) or 100,
+		order_by=order_by,
+	)
+
+
+@frappe.whitelist()
+def set_country_ban(applicant_name, country, reason):
+	"""Whitelisted create surface for Applicant Country Ban (backend-issues #08) -- the doctype
+	previously had no whitelisted writer anywhere, so the only way to set a ban was the raw
+	/api/resource/Applicant Country Ban endpoint, contradicting the "no raw /api/resource/*
+	exposure" architecture rule. Doctype permissions already grant create to Registrar/
+	Complaint Manager/Manager/Admin/System Manager, so this just wraps a normal insert() and
+	lets Frappe's own permission check do the gating."""
+	if not reason:
+		frappe.throw("A written reason is required to set a country ban.", frappe.ValidationError)
+	if frappe.db.exists("Applicant Country Ban", {"applicant": applicant_name, "country": country}):
+		frappe.throw(f"{applicant_name} already has a country ban on file for {country}.", frappe.ValidationError)
+
+	ban = frappe.get_doc(
+		{
+			"doctype": "Applicant Country Ban",
+			"applicant": applicant_name,
+			"country": country,
+			"set_by": frappe.session.user,
+			"set_on": frappe.utils.now_datetime(),
+			"reason": reason,
+		}
+	).insert()
+	return ban.as_dict()
+
+
+@frappe.whitelist()
+def list_country_bans(applicant_name=None):
+	filters = {"applicant": applicant_name} if applicant_name else None
+	return frappe.get_list(
+		"Applicant Country Ban",
+		filters=filters,
+		fields=["name", "applicant", "country", "set_by", "set_on", "reason"],
+		order_by="creation desc",
+	)
+
+
+@frappe.whitelist()
+def remove_country_ban(ban_name):
+	"""Delete permission on Applicant Country Ban is Manager/Admin/System Manager only (per
+	doctype permissions) -- Registrar/Complaint Manager can set a ban but not lift one."""
+	frappe.delete_doc("Applicant Country Ban", ban_name)
+	return {"deleted": ban_name}

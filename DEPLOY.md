@@ -60,3 +60,34 @@ All database variables are automatically detected when linked to Railway MySQL. 
 The service health check is specified in `railway.json`:
 - **Path**: `/api/method/frappe.ping` (Returns `{"message": "pong"}`)
 - **Timeout**: `300` seconds (allows initial site creation and migrations to complete smoothly).
+
+---
+
+## Frontend/backend topology (decided 2026-08-31, backend-issues #10)
+
+**Decision: the frontend and this backend must always be served under the same origin, via a
+reverse proxy** (e.g. Nginx/Caddy routing `/` to the frontend build and `/api` to this Railway
+service, or an equivalent same-domain setup) — the same shape `Friont/vite.config.js`'s dev
+proxy already uses locally.
+
+This is a hard requirement, not a preference: the backend issues its session cookie as
+`SameSite=Lax` (Frappe's framework default) and sends no CORS headers by default. Both are fine
+for a same-origin reverse proxy, since the browser never treats the request as cross-site. They
+will **actively break auth** if the frontend is ever deployed to its own separate domain (e.g. a
+static host like Vercel/Netlify calling this Railway URL directly):
+- `SameSite=Lax` cookies are not attached to cross-site `fetch`/XHR at all (only top-level page
+  navigations), so the session cookie silently stops being sent — every authenticated call looks
+  like a Guest request.
+- There's also no `Access-Control-Allow-Origin` response header, so the browser blocks the
+  response outright regardless of the cookie issue.
+
+If this decision changes later and the frontend needs its own domain, two things need to change
+together, not separately:
+1. Set `"allow_cors": ["https://your-frontend-domain"]` in this site's `site_config.json`
+   (Frappe's built-in CORS support, `frappe.app.set_cors_headers` — no code change needed).
+2. Override the session cookie to `SameSite=None; Secure` — Frappe hardcodes `SameSite=Lax` in
+   `LoginManager.set_cookie` (`frappe/auth.py`), so this requires a framework-level override
+   (e.g. a `boot_session` hook re-issuing the cookie), not a config value.
+
+Do not deploy the frontend to a separate origin without doing both of the above — doing just one
+reproduces the exact failure this section exists to prevent.

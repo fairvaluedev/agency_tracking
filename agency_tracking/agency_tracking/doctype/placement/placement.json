@@ -45,6 +45,7 @@
   "medical_selected_status",
   "medical_selected_expiry_date",
   "medical_2_sec",
+  "medical_2_examination_date",
   "medical_2_status",
   "ticketing_sec",
   "ticket_number",
@@ -304,6 +305,11 @@
    "label": "Pre-Departure Medical (Medical 2)"
   },
   {
+   "fieldname": "medical_2_examination_date",
+   "fieldtype": "Date",
+   "label": "Examination Date"
+  },
+  {
    "default": "Pending",
    "description": "Within ~72h of the flight. Separate from the Applicant's earlier registration-time FIT check (Part A.2 Stage 8) and the Selected-stage check above — gates Ticketed -> Departed.",
    "fieldname": "medical_2_status",
@@ -460,6 +466,46 @@
    "read": 1,
    "role": "Ticketer",
    "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Finance Manager"
+  },
+  {
+   "read": 1,
+   "role": "Clearance Officer"
+  },
+  {
+   "read": 1,
+   "role": "Complaint Manager"
+  },
+  {
+   "read": 1,
+   "role": "Communication Manager"
+  },
+  {
+   "read": 1,
+   "role": "Saudi LMIS"
+  },
+  {
+   "read": 1,
+   "role": "Saudi Taeshir"
+  },
+  {
+   "read": 1,
+   "role": "Saudi Embassy"
+  },
+  {
+   "read": 1,
+   "role": "Kuwait LMIS"
+  },
+  {
+   "read": 1,
+   "role": "Kuwait Telesign"
+  },
+  {
+   "read": 1,
+   "role": "Kuwait Embassy"
   }
  ],
  "search_fields": "applicant,contractor,destination_country,status",

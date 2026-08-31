@@ -9,8 +9,27 @@ from agency_tracking.agency_tracking.doctype.placement.test_placement import (
 	registered_applicant,
 )
 from agency_tracking.agency_tracking.tests.test_portal_api import cv_generated_applicant
-from agency_tracking.placement_api import advance_placement, create_muayena_placement, upload_contract
+from agency_tracking.placement_api import (
+	advance_placement,
+	create_muayena_placement,
+	list_placements,
+	record_predeparture_medical_result,
+	record_ticket_details,
+	upload_contract,
+)
 from agency_tracking.portal_api import select_candidate
+
+
+def make_role_user(tag, role):
+	return frappe.get_doc(
+		{
+			"doctype": "User",
+			"email": f"mpa-{tag}@example.com",
+			"first_name": f"MPA {tag}",
+			"send_welcome_email": 0,
+			"roles": [{"role": role}],
+		}
+	).insert(ignore_permissions=True)
 
 CONTRACT_TEXT_WITH_DATE = "Employment Contract\nContract Date: 13/08/2026\n..."
 
@@ -118,3 +137,108 @@ class TestPlacementAPI(FrappeTestCase):
 		frappe.set_user(owner.user)
 		with self.assertRaises(frappe.PermissionError):
 			advance_placement(placement["name"], "Processing")
+
+	def test_record_predeparture_medical_result_fit_opens_path_to_departed(self):
+		# backend-issues #01: this was previously impossible — medical_2_status had no
+		# whitelisted writer anywhere, so no Placement could ever legally reach Departed.
+		from agency_tracking.agency_tracking.tests.test_state_machine import complete_all_clearance_steps
+
+		applicant = registered_applicant("mpa10", entry_track="Muayena", destination_country="Kuwait")
+		contractor = make_contractor("mpa10", country="Kuwait")
+		placement = create_muayena_placement(applicant.name, contractor.name)
+		frappe.db.set_value("Placement", placement["name"], "medical_selected_status", "FIT")
+		advance_placement(placement["name"], "Processing")
+		complete_all_clearance_steps(placement["name"])
+		advance_placement(placement["name"], "Stamped")
+		record_ticket_details(placement["name"], "TK-mpa10", "2026-09-15")
+		advance_placement(placement["name"], "Ticketed")
+
+		result = record_predeparture_medical_result(placement["name"], "FIT", examination_date="2026-09-12")
+		self.assertEqual(result["medical_2_status"], "FIT")
+
+		final = advance_placement(placement["name"], "Departed")
+		self.assertEqual(final["status"], "Departed")
+
+	def test_record_predeparture_medical_result_unfit_cancels_applicant(self):
+		from agency_tracking.agency_tracking.tests.test_state_machine import complete_all_clearance_steps
+
+		applicant = registered_applicant("mpa11", entry_track="Muayena", destination_country="Kuwait")
+		contractor = make_contractor("mpa11", country="Kuwait")
+		placement = create_muayena_placement(applicant.name, contractor.name)
+		frappe.db.set_value("Placement", placement["name"], "medical_selected_status", "FIT")
+		advance_placement(placement["name"], "Processing")
+		complete_all_clearance_steps(placement["name"])
+		advance_placement(placement["name"], "Stamped")
+		record_ticket_details(placement["name"], "TK-mpa11", "2026-09-15")
+		advance_placement(placement["name"], "Ticketed")
+
+		record_predeparture_medical_result(placement["name"], "UNFIT")
+
+		applicant.reload()
+		self.assertEqual(applicant.status, "Cancelled")
+
+	def test_record_ticket_details_persists_fields_despite_missing_fx_rate(self):
+		# backend-issues #05: a missing FX rate for the given currency used to roll back the
+		# whole call, including ticket_number/flight_date, which have nothing to do with money.
+		applicant = registered_applicant("mpa12", entry_track="Muayena", destination_country="Kuwait")
+		contractor = make_contractor("mpa12", country="Kuwait")
+		placement = create_muayena_placement(applicant.name, contractor.name)
+
+		result = record_ticket_details(
+			placement["name"], "TK-mpa12", "2026-09-15", ticket_cost=200, currency="XYZ-NO-RATE"
+		)
+		self.assertEqual(result["ticket_number"], "TK-mpa12")
+		self.assertIn("warning", result)
+
+		saved = frappe.db.get_value("Placement", placement["name"], ["ticket_number", "flight_date"], as_dict=True)
+		self.assertEqual(saved.ticket_number, "TK-mpa12")
+
+	def test_stamped_to_ticketed_blocked_without_ticket_number(self):
+		from agency_tracking.agency_tracking.tests.test_state_machine import complete_all_clearance_steps
+
+		applicant = registered_applicant("mpa13", entry_track="Muayena", destination_country="Kuwait")
+		contractor = make_contractor("mpa13", country="Kuwait")
+		placement = create_muayena_placement(applicant.name, contractor.name)
+		frappe.db.set_value("Placement", placement["name"], "medical_selected_status", "FIT")
+		advance_placement(placement["name"], "Processing")
+		complete_all_clearance_steps(placement["name"])
+		advance_placement(placement["name"], "Stamped")
+
+		with self.assertRaises(frappe.ValidationError) as ctx:
+			advance_placement(placement["name"], "Ticketed")
+		self.assertIn("ticket_number", str(ctx.exception))
+
+	def test_gate_error_message_names_the_missing_condition(self):
+		# backend-issues #06: gate-blocked transitions used to return a fully generic
+		# "gate condition not met" with no field/reason.
+		applicant = registered_applicant("mpa14", entry_track="Muayena", destination_country="Kuwait")
+		contractor = make_contractor("mpa14", country="Kuwait")
+		placement = create_muayena_placement(applicant.name, contractor.name)
+
+		with self.assertRaises(frappe.ValidationError) as ctx:
+			advance_placement(placement["name"], "Processing")
+		self.assertIn("medical (Selected stage) status", str(ctx.exception))
+		self.assertIn("FIT", str(ctx.exception))
+
+	def test_list_placements_readable_by_clearance_officer(self):
+		# backend-issues #02: Clearance Officer had zero read access to Placement via the
+		# frontend's old /api/resource/Placement fallback -- this is the whitelisted
+		# replacement, and the doctype's own permissions now grant it read.
+		applicant = registered_applicant("mpa15", entry_track="Muayena", destination_country="Kuwait")
+		contractor = make_contractor("mpa15", country="Kuwait")
+		placement = create_muayena_placement(applicant.name, contractor.name)
+
+		officer = make_role_user("mpa15", "Clearance Officer")
+		frappe.set_user(officer.name)
+		result = list_placements(filters={"name": placement["name"]})
+		self.assertEqual(len(result), 1)
+
+	def test_list_placements_denied_for_foreign_agency_of_unrelated_placement(self):
+		applicant = registered_applicant("mpa16", entry_track="Muayena", destination_country="Kuwait")
+		contractor = make_contractor("mpa16", country="Kuwait")
+		create_muayena_placement(applicant.name, contractor.name)
+
+		other_agency = make_contractor("mpa16b", country="Kuwait")
+		frappe.set_user(other_agency.user)
+		with self.assertRaises(frappe.PermissionError):
+			list_placements()
