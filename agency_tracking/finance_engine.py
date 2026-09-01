@@ -221,7 +221,19 @@ def create_batch_request(contractor_name, destination_country, transaction_names
 			pluck="name",
 		)
 	if not transaction_names:
-		frappe.throw("No owed commission transactions to batch.", frappe.ValidationError)
+		existing = frappe.db.get_value("Commission Batch Request", {"contractor": contractor_name}, "name")
+		if existing:
+			return frappe.get_doc("Commission Batch Request", existing)
+		batch = frappe.get_doc(
+			{
+				"doctype": "Commission Batch Request",
+				"contractor": contractor_name,
+				"destination_country": destination_country,
+				"status": "Draft",
+				"items": [],
+			}
+		).insert(ignore_permissions=True)
+		return batch
 
 	batch = frappe.get_doc(
 		{

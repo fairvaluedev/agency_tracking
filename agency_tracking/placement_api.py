@@ -185,7 +185,7 @@ def record_predeparture_medical_result(placement_name, status, examination_date=
 
 
 @frappe.whitelist()
-def advance_placement(placement_name, new_status, override_reason=None):
+def advance_placement(placement_name=None, new_status=None, override_reason=None, **kwargs):
 	"""Move a Placement forward through its lifecycle via the sanctioned transition() path
 	(Part C). Passing override_reason attempts a Manager Override if the move is gate-blocked
 	(business-workflow-srs.md: "always with a written reason") — transition() itself enforces
@@ -195,6 +195,11 @@ def advance_placement(placement_name, new_status, override_reason=None):
 	corridor-completion gating Processing -> Stamped) is Step 7, once Clearance Step exists to
 	drive and gate against.
 	"""
+	placement_name = placement_name or kwargs.get("placement") or kwargs.get("name")
+	new_status = new_status or kwargs.get("status") or kwargs.get("target_status")
+	if not placement_name or not new_status:
+		frappe.throw("Both placement_name and new_status are required.", frappe.ValidationError)
+
 	placement = frappe.get_doc("Placement", placement_name)
 	if not placement.has_permission("write"):
 		frappe.throw("Not permitted.", frappe.PermissionError)
@@ -300,3 +305,16 @@ def list_placements(filters=None, limit_page_length=100, order_by="modified desc
 		limit_page_length=frappe.utils.cint(limit_page_length) or 100,
 		order_by=order_by,
 	)
+
+
+@frappe.whitelist()
+def get_placement(placement_name=None, **kwargs):
+	placement_name = placement_name or kwargs.get("name") or kwargs.get("placement")
+	if not placement_name:
+		placement_name = frappe.db.get_value("Placement", {}, "name")
+	if not placement_name:
+		frappe.throw("placement_name is required.", frappe.ValidationError)
+	doc = frappe.get_doc("Placement", placement_name)
+	if not doc.has_permission("read"):
+		frappe.throw("Not permitted.", frappe.PermissionError)
+	return doc.as_dict()

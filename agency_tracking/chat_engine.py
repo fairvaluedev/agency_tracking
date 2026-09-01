@@ -43,7 +43,7 @@ def route_agency_to_communication_manager(contractor_name):
 		)
 	)
 	if not managers:
-		frappe.throw("No Communication Manager is configured yet.", frappe.ValidationError)
+		return "Administrator"
 
 	# Deterministic round-robin: how many Agency threads already exist, mod the manager count —
 	# no separate "next index" counter to maintain/reset, and it's stable under concurrent

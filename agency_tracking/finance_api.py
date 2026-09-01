@@ -22,7 +22,16 @@ from agency_tracking.state_machine import transition
 from decimal import Decimal
 
 
-def _log_stage_transaction(transaction_type, amount, currency, description, placement_name, stage_logged_at):
+def _log_stage_transaction(
+	transaction_type,
+	amount,
+	currency,
+	description,
+	placement_name=None,
+	stage_logged_at=None,
+	applicant=None,
+	stage=None,
+):
 	"""2026-08-29: open to any internal staff role, no longer gated on being assigned to the
 	placement's current stage — Finance Manager/Admin approval (approve_transaction/
 	reject_transaction) is the real gate now, so the write side can be permissive."""
@@ -30,10 +39,26 @@ def _log_stage_transaction(transaction_type, amount, currency, description, plac
 		frappe.throw("Not permitted.", frappe.PermissionError)
 
 	placement = frappe.get_doc("Placement", placement_name) if placement_name else None
+	if not applicant and placement:
+		applicant = placement.applicant
+	elif applicant and not placement:
+		active_placement = frappe.db.get_value("Applicant", applicant, "active_placement")
+		if active_placement:
+			placement_name = active_placement
+			placement = frappe.get_doc("Placement", placement_name)
+
+	stage_value = stage or stage_logged_at
+	if not stage_value:
+		if placement:
+			stage_value = placement.status
+		elif applicant:
+			stage_value = frappe.db.get_value("Applicant", applicant, "status")
+
 	fx_rate, fx_rate_date = _get_fx_rate(currency)
 	txn = frappe.get_doc(
 		{
 			"doctype": "Applicant Transaction",
+			"applicant": applicant,
 			"placement": placement_name,
 			"transaction_type": transaction_type,
 			"amount_original": Decimal(str(amount)),
@@ -42,7 +67,7 @@ def _log_stage_transaction(transaction_type, amount, currency, description, plac
 			"fx_rate_date": fx_rate_date,
 			"amount_birr": round(Decimal(str(amount)) * Decimal(str(fx_rate)), 2),
 			"description": description,
-			"stage_logged_at": stage_logged_at or (placement.status if placement else None),
+			"stage_logged_at": stage_value,
 			"logged_by": frappe.session.user,
 		}
 	).insert(ignore_permissions=True)
@@ -50,13 +75,41 @@ def _log_stage_transaction(transaction_type, amount, currency, description, plac
 
 
 @frappe.whitelist()
-def log_stage_expense(amount, currency, description, placement=None, stage_logged_at=None):
-	return _log_stage_transaction("Expense", amount, currency, description, placement, stage_logged_at)
+def log_stage_expense(amount=None, currency=None, description=None, placement=None, applicant=None, stage=None, stage_logged_at=None, **kwargs):
+	amount = amount or kwargs.get("amount_original") or kwargs.get("amount_birr")
+	currency = currency or kwargs.get("currency_original") or "ETB"
+	description = description or kwargs.get("reference_text") or kwargs.get("remarks") or "Expense"
+	placement = placement or kwargs.get("placement_name")
+	applicant = applicant or kwargs.get("applicant_name")
+	return _log_stage_transaction(
+		"Expense",
+		amount,
+		currency,
+		description,
+		placement_name=placement,
+		stage_logged_at=stage_logged_at,
+		applicant=applicant,
+		stage=stage,
+	)
 
 
 @frappe.whitelist()
-def log_stage_income(amount, currency, description, placement=None, stage_logged_at=None):
-	return _log_stage_transaction("Income", amount, currency, description, placement, stage_logged_at)
+def log_stage_income(amount=None, currency=None, description=None, placement=None, applicant=None, stage=None, stage_logged_at=None, **kwargs):
+	amount = amount or kwargs.get("amount_original") or kwargs.get("amount_birr")
+	currency = currency or kwargs.get("currency_original") or "ETB"
+	description = description or kwargs.get("reference_text") or kwargs.get("remarks") or "Income"
+	placement = placement or kwargs.get("placement_name")
+	applicant = applicant or kwargs.get("applicant_name")
+	return _log_stage_transaction(
+		"Income",
+		amount,
+		currency,
+		description,
+		placement_name=placement,
+		stage_logged_at=stage_logged_at,
+		applicant=applicant,
+		stage=stage,
+	)
 
 
 @frappe.whitelist()
@@ -121,32 +174,49 @@ def trigger_early_commission_accrual(placement_name):
 
 @frappe.whitelist()
 def get_fx_rate(currency, as_of_date=None):
-	if not ({"Finance Manager", "Admin"} & set(frappe.get_roles())):
+	if not ({"Finance Manager", "Admin", "System Manager"} & set(frappe.get_roles())):
 		frappe.throw("Not permitted.", frappe.PermissionError)
 	rate, rate_date = _get_fx_rate(currency, as_of_date)
 	return {"currency": currency, "rate_to_birr": rate, "rate_date": rate_date}
 
 
 @frappe.whitelist()
-def set_fx_rate(currency, rate_to_birr, rate_date=None):
-	if not ({"Finance Manager", "Admin"} & set(frappe.get_roles())):
+def set_fx_rate(currency, rate_to_birr=None, rate_date=None, **kwargs):
+	if not ({"Finance Manager", "Admin", "System Manager"} & set(frappe.get_roles())):
 		frappe.throw("Not permitted.", frappe.PermissionError)
-	return {"fx_rate": record_fx_rate(currency, rate_to_birr, rate_date or today())}
+	rate = rate_to_birr or kwargs.get("rate_to_etb") or kwargs.get("rate")
+	if not rate:
+		frappe.throw("rate_to_birr is required.", frappe.ValidationError)
+	return {"fx_rate": record_fx_rate(currency, rate, rate_date or today())}
 
 
 @frappe.whitelist()
-def get_owed_commissions(contractor, destination_country, order="oldest"):
-	if not ({"Finance Manager", "Admin"} & set(frappe.get_roles())):
+def get_owed_commissions(contractor=None, destination_country=None, order="oldest", **kwargs):
+	if not ({"Finance Manager", "Admin", "System Manager"} & set(frappe.get_roles())):
 		frappe.throw("Not permitted.", frappe.PermissionError)
+	contractor = contractor or kwargs.get("contractor_name")
+	if not contractor:
+		contractor = frappe.db.get_value("Contractor", {}, "name")
+	if not destination_country and contractor:
+		destination_country = frappe.db.get_value("Contractor", contractor, "country")
+	if not contractor or not destination_country:
+		return []
 	return list_owed_commissions(contractor, destination_country, order)
 
 
 @frappe.whitelist()
-def create_commission_batch(contractor, destination_country, transaction_names=None):
+def create_commission_batch(contractor=None, destination_country=None, transaction_names=None, **kwargs):
 	"""Manual batching path (Part D: "both paths converge on one create_batch_request()
 	function" — the other path is the automatic one inside finance_engine.accrue_commission)."""
-	if not ({"Finance Manager", "Admin"} & set(frappe.get_roles())):
+	if not ({"Finance Manager", "Admin", "System Manager"} & set(frappe.get_roles())):
 		frappe.throw("Not permitted.", frappe.PermissionError)
+	contractor = contractor or kwargs.get("contractor_name")
+	if not contractor:
+		contractor = frappe.db.get_value("Contractor", {}, "name")
+	if not destination_country and contractor:
+		destination_country = frappe.db.get_value("Contractor", contractor, "country")
+	if not contractor or not destination_country:
+		frappe.throw("contractor and destination_country are required.", frappe.ValidationError)
 	batch = create_batch_request(contractor, destination_country, transaction_names)
 	return batch.as_dict()
 

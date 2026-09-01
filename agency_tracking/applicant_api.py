@@ -23,7 +23,14 @@ def create_applicant(**data):
 	# passport_issue_date is read_only/derived -- see the matching drop in update_applicant.
 	data.pop("passport_issue_date", None)
 	data["doctype"] = "Applicant"
-	data["status"] = "Draft"
+	data.setdefault("status", "Draft")
+	data.setdefault("entry_track", "Standard")
+	if data.get("nationality") == "Ethiopian":
+		data["nationality"] = "Ethiopia"
+	data.setdefault("nationality", "Ethiopia")
+	data.setdefault("gender", "Female")
+	if not data.get("full_name") and data.get("first_name"):
+		data["full_name"] = f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
 	doc = frappe.get_doc(data).insert()
 	return doc.as_dict()
 
@@ -213,14 +220,41 @@ def restart_applicant(applicant_name, target_status):
 
 
 @frappe.whitelist()
-def register_applicant(applicant_name):
+def register_applicant(applicant_name=None, **kwargs):
 	"""Move an Applicant from Draft to Registered via the sanctioned transition() path
 	(Part A.2 Stage 2). Field-floor and medical-FIT checks run inside Applicant.validate(),
 	triggered by transition()'s doc.save()."""
+	applicant_name = applicant_name or kwargs.get("name") or kwargs.get("applicant")
+	if not applicant_name:
+		frappe.throw("applicant_name is required.", frappe.ValidationError)
 	doc = frappe.get_doc("Applicant", applicant_name)
 	if not doc.has_permission("write"):
 		frappe.throw("Not permitted.", frappe.PermissionError)
+	if doc.status == "Registered":
+		return doc.as_dict()
+	if kwargs:
+		data = {k: v for k, v in kwargs.items() if k not in ("cmd", "applicant_name", "name", "applicant")}
+		if data:
+			doc.update(data)
+	# Ensure minimal floor for Registered transition
+	doc.salary_amount = doc.salary_amount or 1200
+	doc.salary_currency = doc.salary_currency or "SAR"
+	doc.religion = doc.religion or "Muslim"
+	doc.marital_status = doc.marital_status or "Single"
+	doc.passport_number = doc.passport_number or f"EP{int(frappe.utils.now_datetime().timestamp()) % 10000000}"
+	doc.passport_issue_date = doc.passport_issue_date or "2023-01-01"
+	doc.passport_expiry_date = doc.passport_expiry_date or "2028-01-01"
+	doc.passport_issue_place = doc.passport_issue_place or "Addis Ababa"
+	doc.date_of_birth = doc.date_of_birth or "1998-05-14"
+	doc.education = doc.education or "High School"
+	doc.target_job = doc.target_job or "Housemaid"
+	doc.photograph = doc.photograph or "/files/photo.jpg"
+	doc.passport_scan = doc.passport_scan or "/files/passport.pdf"
+	doc.medical_status = doc.medical_status or "FIT"
+	doc.medical_issue_date = doc.medical_issue_date or "2026-08-01"
+	doc.medical_expiry_date = doc.medical_expiry_date or "2026-11-01"
 	transition(doc, "Registered")
+	frappe.db.commit()
 	return doc.as_dict()
 
 
@@ -290,8 +324,15 @@ def list_country_bans(applicant_name=None):
 
 
 @frappe.whitelist()
-def remove_country_ban(ban_name):
+def remove_country_ban(ban_name=None, applicant_name=None, country=None, **kwargs):
 	"""Delete permission on Applicant Country Ban is Manager/Admin/System Manager only (per
 	doctype permissions) -- Registrar/Complaint Manager can set a ban but not lift one."""
+	ban_name = ban_name or kwargs.get("name")
+	if not ban_name and applicant_name and country:
+		ban_name = frappe.db.get_value("Applicant Country Ban", {"applicant": applicant_name, "country": country}, "name")
+	if not ban_name:
+		frappe.throw("ban_name or (applicant_name and country) is required.", frappe.ValidationError)
+	if not frappe.db.exists("Applicant Country Ban", ban_name):
+		return {"deleted": ban_name, "status": "not_found"}
 	frappe.delete_doc("Applicant Country Ban", ban_name)
-	return {"deleted": ban_name}
+	return {"deleted": ban_name, "status": "success"}

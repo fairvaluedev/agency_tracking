@@ -99,29 +99,17 @@ paths:
       tags:
       - 01 - Authentication & Session
       summary: Get Current User
-      description: 'allow_guest=True deliberately, with an explicit Guest check inside
-        — not a security
-
-        relaxation. Without it, an anonymous SPA''s "is there already a session?"
-        bootstrap check
-
-        (needed so a page refresh doesn''t force a fresh login) hits Frappe''s own
-        whitelist guard
-
-        before this function''s body ever runs, producing a 403 on every single cold
-        page load.
-
-        Returning None for Guest instead of throwing means that bootstrap check is
-        a normal 200
-
-        response either way — "nobody''s logged in" is an expected outcome, not an
-        error.
-
-
-        **Authorized Roles:** Kuwait Embassy, Manager, Kuwait Telesign, Ticketer,
-        Finance Manager, Saudi LMIS, Saudi Taeshir, Kuwait LMIS, Contract Parser,
-        Guest, System Manager, Administrator, Clearance Officer, Saudi Embassy, Registrar,
-        Communication Manager, Admin, Complaint Manager, Foreign Agency'
+      description: "allow_guest=True deliberately, with an explicit Guest check inside\
+        \ \u2014 not a security\nrelaxation. Without it, an anonymous SPA's \"is there\
+        \ already a session?\" bootstrap check\n(needed so a page refresh doesn't\
+        \ force a fresh login) hits Frappe's own whitelist guard\nbefore this function's\
+        \ body ever runs, producing a 403 on every single cold page load.\nReturning\
+        \ None for Guest instead of throwing means that bootstrap check is a normal\
+        \ 200\nresponse either way \u2014 \"nobody's logged in\" is an expected outcome,\
+        \ not an error.\n\n**Authorized Roles:** Kuwait Embassy, Manager, Kuwait Telesign,\
+        \ Ticketer, Finance Manager, Saudi LMIS, Saudi Taeshir, Kuwait LMIS, Contract\
+        \ Parser, Guest, System Manager, Administrator, Clearance Officer, Saudi Embassy,\
+        \ Registrar, Communication Manager, Admin, Complaint Manager, Foreign Agency"
       operationId: get_current_user
       security:
       - frappeSessionCookie: []
@@ -757,20 +745,20 @@ paths:
       - 02 - Applicants & Registration
       summary: Update Applicant
       description: "Edit an Applicant still at Draft or Registered. Does not change\
-        \ status — use\nregister_applicant for that transition.\n\nTwo special cases\
-        \ handled here rather than in Applicant.validate() (both need to run\n*before*\
-        \ the normal update, and the entry_track one needs its own transition() call\
-        \ --\nsee CLAUDE.md's absolute \"no doc.status = X; doc.save()\" rule, state_machine.py):\n\
-        \n1. entry_track changing while Registered/CV Generated forces a regression\
-        \ to Draft first\n   (old track still in place, so the lenient Draft floor\
-        \ trivially passes), *then* the rest\n   of the update (including the new\
-        \ entry_track) applies normally. cycle_number bumps\n   automatically via\
-        \ state_machine.bump_cycle_number.\n2. destination_country being set/changed\
-        \ is checked against Applicant Country Ban.\n\n**Authorized Roles:** Kuwait\
-        \ Embassy, Manager, Kuwait Telesign, Ticketer, Finance Manager, Saudi LMIS,\
-        \ Saudi Taeshir, Kuwait LMIS, Contract Parser, System Manager, Administrator,\
-        \ Clearance Officer, Saudi Embassy, Registrar, Communication Manager, Admin,\
-        \ Complaint Manager"
+        \ status \u2014 use\nregister_applicant for that transition.\n\nTwo special\
+        \ cases handled here rather than in Applicant.validate() (both need to run\n\
+        *before* the normal update, and the entry_track one needs its own transition()\
+        \ call --\nsee CLAUDE.md's absolute \"no doc.status = X; doc.save()\" rule,\
+        \ state_machine.py):\n\n1. entry_track changing while Registered/CV Generated\
+        \ forces a regression to Draft first\n   (old track still in place, so the\
+        \ lenient Draft floor trivially passes), *then* the rest\n   of the update\
+        \ (including the new entry_track) applies normally. cycle_number bumps\n \
+        \  automatically via state_machine.bump_cycle_number.\n2. destination_country\
+        \ being set/changed is checked against Applicant Country Ban.\n\n**Authorized\
+        \ Roles:** Kuwait Embassy, Manager, Kuwait Telesign, Ticketer, Finance Manager,\
+        \ Saudi LMIS, Saudi Taeshir, Kuwait LMIS, Contract Parser, System Manager,\
+        \ Administrator, Clearance Officer, Saudi Embassy, Registrar, Communication\
+        \ Manager, Admin, Complaint Manager"
       operationId: update_applicant
       security:
       - frappeSessionCookie: []
@@ -961,18 +949,12 @@ paths:
       tags:
       - 04 - Portal & Candidate Discovery
       summary: List My Wakala Requests
-      description: 'New (2026-08-29): a Contractor-scoped list of every unpaid Wakala-bearing
-        Embassy step
-
-        for their own placements — the page the watchdog/manual reminders (watchdogs.
-
-        wakala_reminder_watchdog) are actually pointing them at. Mirrors list_my_clearance_steps()''s
-
-        pattern for the internal-staff side.
-
-
-        **Authorized Roles:** Manager, Foreign Agency, System Manager, Administrator,
-        Admin'
+      description: "New (2026-08-29): a Contractor-scoped list of every unpaid Wakala-bearing\
+        \ Embassy step\nfor their own placements \u2014 the page the watchdog/manual\
+        \ reminders (watchdogs.\nwakala_reminder_watchdog) are actually pointing them\
+        \ at. Mirrors list_my_clearance_steps()'s\npattern for the internal-staff\
+        \ side.\n\n**Authorized Roles:** Manager, Foreign Agency, System Manager,\
+        \ Administrator, Admin"
       operationId: list_my_wakala_requests
       security:
       - frappeSessionCookie: []
@@ -1010,15 +992,10 @@ paths:
       tags:
       - 04 - Portal & Candidate Discovery
       summary: List Portal Candidates
-      description: 'Part G: an agency sees only its own destination country''s catalog
-        — Standard-track
-
-        candidates that are CV Generated and not yet locked by anyone (active_placement
-        empty).
-
-
-        **Authorized Roles:** Manager, Foreign Agency, System Manager, Administrator,
-        Admin'
+      description: "Part G: an agency sees only its own destination country's catalog\
+        \ \u2014 Standard-track\ncandidates that are CV Generated and not yet locked\
+        \ by anyone (active_placement empty).\n\n**Authorized Roles:** Manager, Foreign\
+        \ Agency, System Manager, Administrator, Admin"
       operationId: list_portal_candidates
       security:
       - frappeSessionCookie: []
@@ -1056,33 +1033,17 @@ paths:
       tags:
       - 04 - Portal & Candidate Discovery
       summary: Select Candidate
-      description: 'Part A.2 Stage 4: atomic, globally exclusive selection. The instant
-        one agency selects
-
-        a candidate, they vanish from every other agency''s view — enforced here with
-        a row lock
-
-        (SELECT ... FOR UPDATE) so two concurrent selections can''t both see the candidate
-        as free.
-
-
-        free_replacement_for_complaint (Part A.4, Step 10): a worker who returned
-        within the
-
-        3-month window entitles the same contractor to one free replacement selection.
-        The
-
-        replacement "goes through the exact same journey from Stage 4 onward as any
-        newly selected
-
-        candidate" (business-workflow-srs.md) — i.e. this same function — just flagged
-        so
-
-        finance_engine.accrue_commission() skips billing for it.
-
-
-        **Authorized Roles:** Manager, Foreign Agency, System Manager, Administrator,
-        Admin'
+      description: "Part A.2 Stage 4: atomic, globally exclusive selection. The instant\
+        \ one agency selects\na candidate, they vanish from every other agency's view\
+        \ \u2014 enforced here with a row lock\n(SELECT ... FOR UPDATE) so two concurrent\
+        \ selections can't both see the candidate as free.\n\nfree_replacement_for_complaint\
+        \ (Part A.4, Step 10): a worker who returned within the\n3-month window entitles\
+        \ the same contractor to one free replacement selection. The\nreplacement\
+        \ \"goes through the exact same journey from Stage 4 onward as any newly selected\n\
+        candidate\" (business-workflow-srs.md) \u2014 i.e. this same function \u2014\
+        \ just flagged so\nfinance_engine.accrue_commission() skips billing for it.\n\
+        \n**Authorized Roles:** Manager, Foreign Agency, System Manager, Administrator,\
+        \ Admin"
       operationId: select_candidate
       security:
       - frappeSessionCookie: []
@@ -1130,31 +1091,17 @@ paths:
       tags:
       - 05 - Placements & Logistics
       summary: Advance Placement
-      description: 'Move a Placement forward through its lifecycle via the sanctioned
-        transition() path
-
-        (Part C). Passing override_reason attempts a Manager Override if the move
-        is gate-blocked
-
-        (business-workflow-srs.md: "always with a written reason") — transition()
-        itself enforces
-
-        the Manager/Admin role check and that the reason is non-empty.
-
-
-        This is the direct/manual path. The real auto-chain (LMIS -> Ticketing ->
-        Departure,
-
-        corridor-completion gating Processing -> Stamped) is Step 7, once Clearance
-        Step exists to
-
-        drive and gate against.
-
-
-        **Authorized Roles:** Kuwait Embassy, Manager, Kuwait Telesign, Ticketer,
-        Finance Manager, Saudi LMIS, Saudi Taeshir, Kuwait LMIS, Contract Parser,
-        System Manager, Administrator, Clearance Officer, Saudi Embassy, Registrar,
-        Communication Manager, Admin, Complaint Manager'
+      description: "Move a Placement forward through its lifecycle via the sanctioned\
+        \ transition() path\n(Part C). Passing override_reason attempts a Manager\
+        \ Override if the move is gate-blocked\n(business-workflow-srs.md: \"always\
+        \ with a written reason\") \u2014 transition() itself enforces\nthe Manager/Admin\
+        \ role check and that the reason is non-empty.\n\nThis is the direct/manual\
+        \ path. The real auto-chain (LMIS -> Ticketing -> Departure,\ncorridor-completion\
+        \ gating Processing -> Stamped) is Step 7, once Clearance Step exists to\n\
+        drive and gate against.\n\n**Authorized Roles:** Kuwait Embassy, Manager,\
+        \ Kuwait Telesign, Ticketer, Finance Manager, Saudi LMIS, Saudi Taeshir, Kuwait\
+        \ LMIS, Contract Parser, System Manager, Administrator, Clearance Officer,\
+        \ Saudi Embassy, Registrar, Communication Manager, Admin, Complaint Manager"
       operationId: advance_placement
       security:
       - frappeSessionCookie: []
@@ -1204,41 +1151,22 @@ paths:
       tags:
       - 05 - Placements & Logistics
       summary: Create Muayena Placement
-      description: 'Muayena track (Part A.1 / Part I Step 4): "enters directly at
-        Selected with contract in
-
-        hand" — no portal, no CV. Internal staff (Registrar/Manager/Admin/Contract
-        Parser) only —
-
-        a Muayena candidate is matched to an agency directly, not through the public
-        portal.
-
-
-        2026-08-29 correction: destination_country is no longer a parameter here.
-        It used to be
-
-        set as a side effect of this call (the old assumption was that Muayena''s
-        destination
-
-        becomes known only once a contract names it); that was wrong — it''s selected
-        during
-
-        Draft/Registered same as Standard, and is now part of MUAYENA_REGISTERED_REQUIRED_FIELDS.
-
-        The contractor is always picked manually for Muayena (both countries) — Saudi''s
-        contract
-
-        *can* carry a labeled agency name/license for cross-checking, but auto-assignment
-        isn''t
-
-        attempted at creation time either way; Kuwait''s contract never carries one
-        at all.
-
-
-        **Authorized Roles:** Kuwait Embassy, Manager, Kuwait Telesign, Ticketer,
-        Finance Manager, Saudi LMIS, Saudi Taeshir, Kuwait LMIS, Contract Parser,
-        System Manager, Administrator, Clearance Officer, Saudi Embassy, Registrar,
-        Communication Manager, Admin, Complaint Manager'
+      description: "Muayena track (Part A.1 / Part I Step 4): \"enters directly at\
+        \ Selected with contract in\nhand\" \u2014 no portal, no CV. Internal staff\
+        \ (Registrar/Manager/Admin/Contract Parser) only \u2014\na Muayena candidate\
+        \ is matched to an agency directly, not through the public portal.\n\n2026-08-29\
+        \ correction: destination_country is no longer a parameter here. It used to\
+        \ be\nset as a side effect of this call (the old assumption was that Muayena's\
+        \ destination\nbecomes known only once a contract names it); that was wrong\
+        \ \u2014 it's selected during\nDraft/Registered same as Standard, and is now\
+        \ part of MUAYENA_REGISTERED_REQUIRED_FIELDS.\nThe contractor is always picked\
+        \ manually for Muayena (both countries) \u2014 Saudi's contract\n*can* carry\
+        \ a labeled agency name/license for cross-checking, but auto-assignment isn't\n\
+        attempted at creation time either way; Kuwait's contract never carries one\
+        \ at all.\n\n**Authorized Roles:** Kuwait Embassy, Manager, Kuwait Telesign,\
+        \ Ticketer, Finance Manager, Saudi LMIS, Saudi Taeshir, Kuwait LMIS, Contract\
+        \ Parser, System Manager, Administrator, Clearance Officer, Saudi Embassy,\
+        \ Registrar, Communication Manager, Admin, Complaint Manager"
       operationId: create_muayena_placement
       security:
       - frappeSessionCookie: []
@@ -2032,15 +1960,10 @@ paths:
       tags:
       - 06 - Clearances & Embassies
       summary: Reassign Clearance Step
-      description: 'Part A.2: "reassignable by a manager if needed" — the escape hatch
-        for the default
-
-        auto-chain.
-
-
-        **Authorized Roles:** Kuwait Embassy, Manager, Kuwait Telesign, Clearance
-        Officer, Saudi Embassy, Saudi Taeshir, Saudi LMIS, Kuwait LMIS, Admin, System
-        Manager, Administrator'
+      description: "Part A.2: \"reassignable by a manager if needed\" \u2014 the escape\
+        \ hatch for the default\nauto-chain.\n\n**Authorized Roles:** Kuwait Embassy,\
+        \ Manager, Kuwait Telesign, Clearance Officer, Saudi Embassy, Saudi Taeshir,\
+        \ Saudi LMIS, Kuwait LMIS, Admin, System Manager, Administrator"
       operationId: reassign_clearance_step
       security:
       - frappeSessionCookie: []
@@ -2349,12 +2272,9 @@ paths:
       tags:
       - 07 - Finance & Ledger
       summary: Create Commission Batch
-      description: 'Manual batching path (Part D: "both paths converge on one create_batch_request()
-
-        function" — the other path is the automatic one inside finance_engine.accrue_commission).
-
-
-        **Authorized Roles:** Administrator, System Manager, Finance Manager, Admin'
+      description: "Manual batching path (Part D: \"both paths converge on one create_batch_request()\n\
+        function\" \u2014 the other path is the automatic one inside finance_engine.accrue_commission).\n\
+        \n**Authorized Roles:** Administrator, System Manager, Finance Manager, Admin"
       operationId: create_commission_batch
       security:
       - frappeSessionCookie: []
@@ -2940,16 +2860,11 @@ paths:
       tags:
       - 07 - Finance & Ledger
       summary: Trigger Early Commission Accrual
-      description: 'Part D: "Manual early-trigger (idempotency-guarded either way)"
-        — for cases needing to
-
-        bill sooner than Departed. Same accrue_commission() as the automatic path,
-        so calling this
-
-        and then later reaching Departed naturally is a no-op the second time.
-
-
-        **Authorized Roles:** Administrator, System Manager, Finance Manager, Admin'
+      description: "Part D: \"Manual early-trigger (idempotency-guarded either way)\"\
+        \ \u2014 for cases needing to\nbill sooner than Departed. Same accrue_commission()\
+        \ as the automatic path, so calling this\nand then later reaching Departed\
+        \ naturally is a no-op the second time.\n\n**Authorized Roles:** Administrator,\
+        \ System Manager, Finance Manager, Admin"
       operationId: trigger_early_commission_accrual
       security:
       - frappeSessionCookie: []
@@ -3053,22 +2968,13 @@ paths:
       tags:
       - 07 - Finance & Ledger
       summary: Void Transaction
-      description: 'No hard delete, ever (addendum). Finance Manager/Admin only, mandatory
-        reason. Only
-
-        legal from Approved (ALLOWED_TRANSITIONS enforces this — transition() itself
-        rejects
-
-        voiding a Pending/Rejected row). Routed through transition() like every other
-        status
-
-        change (never doc.status = X; doc.save() directly) -- the row stays visible
-        with its
-
-        status flagged and a Process Event on the audit trail, never disappears.
-
-
-        **Authorized Roles:** Administrator, System Manager, Finance Manager, Admin'
+      description: "No hard delete, ever (addendum). Finance Manager/Admin only, mandatory\
+        \ reason. Only\nlegal from Approved (ALLOWED_TRANSITIONS enforces this \u2014\
+        \ transition() itself rejects\nvoiding a Pending/Rejected row). Routed through\
+        \ transition() like every other status\nchange (never doc.status = X; doc.save()\
+        \ directly) -- the row stays visible with its\nstatus flagged and a Process\
+        \ Event on the audit trail, never disappears.\n\n**Authorized Roles:** Administrator,\
+        \ System Manager, Finance Manager, Admin"
       operationId: void_transaction
       security:
       - frappeSessionCookie: []
@@ -3117,16 +3023,11 @@ paths:
       tags:
       - 08 - Bank Reconciliation
       summary: Manually Match Line
-      description: 'Escape hatch for lines the automatic matcher couldn''t confidently
-        resolve (ambiguous
-
-        amount collisions, missing reference text) — Finance Manager/Admin only, same
-        shape as
-
-        every other manual-override path in this build.
-
-
-        **Authorized Roles:** Administrator, System Manager, Finance Manager, Admin'
+      description: "Escape hatch for lines the automatic matcher couldn't confidently\
+        \ resolve (ambiguous\namount collisions, missing reference text) \u2014 Finance\
+        \ Manager/Admin only, same shape as\nevery other manual-override path in this\
+        \ build.\n\n**Authorized Roles:** Administrator, System Manager, Finance Manager,\
+        \ Admin"
       operationId: manually_match_line
       security:
       - frappeSessionCookie: []
@@ -3403,36 +3304,18 @@ paths:
       tags:
       - 09 - Complaints & Disputes
       summary: Resolve Complaint
-      description: 'Master spec Part A.5: "Only Complaint Manager and Admin can move
-        resolution status."
-
-        Dismissed requires a written reason — enforced both here (clear error before
-        the doctype
-
-        validate() would also catch it) and in Complaint.validate() as a defense-in-depth
-        backstop.
-
-
-        override_reason (Manager Override, e.g. approving a free replacement outside
-        the normal
-
-        3-month window in an exceptional case): overriding a gate is a Manager-level
-        power
-
-        throughout this build (transition() itself enforces Manager/Admin for any
-        override), so
-
-        the permission check here widens to include plain Manager specifically for
-        an override
-
-        attempt — an ordinary (non-override) resolution move stays Complaint Manager/Admin
-        only,
-
-        per Part A.5''s literal statement.
-
-
-        **Authorized Roles:** Complaint Manager, Manager, System Manager, Administrator,
-        Admin'
+      description: "Master spec Part A.5: \"Only Complaint Manager and Admin can move\
+        \ resolution status.\"\nDismissed requires a written reason \u2014 enforced\
+        \ both here (clear error before the doctype\nvalidate() would also catch it)\
+        \ and in Complaint.validate() as a defense-in-depth backstop.\n\noverride_reason\
+        \ (Manager Override, e.g. approving a free replacement outside the normal\n\
+        3-month window in an exceptional case): overriding a gate is a Manager-level\
+        \ power\nthroughout this build (transition() itself enforces Manager/Admin\
+        \ for any override), so\nthe permission check here widens to include plain\
+        \ Manager specifically for an override\nattempt \u2014 an ordinary (non-override)\
+        \ resolution move stays Complaint Manager/Admin only,\nper Part A.5's literal\
+        \ statement.\n\n**Authorized Roles:** Complaint Manager, Manager, System Manager,\
+        \ Administrator, Admin"
       operationId: resolve_complaint
       security:
       - frappeSessionCookie: []
@@ -3489,20 +3372,14 @@ paths:
       tags:
       - 10 - Chat & Messages
       summary: Add Participant
-      description: 'addendum: "adding participants to an agency thread stays restricted"
-        — enforced here as
-
-        an outright block for Agency threads (their shape is fixed at exactly two
-        participants,
-
-        Chat Thread.validate() also enforces this). Internal threads can grow freely
-        between staff.
-
-
-        **Authorized Roles:** Kuwait Embassy, Manager, Kuwait Telesign, Ticketer,
-        Finance Manager, Saudi LMIS, Saudi Taeshir, Kuwait LMIS, Contract Parser,
-        System Manager, Administrator, Clearance Officer, Saudi Embassy, Registrar,
-        Communication Manager, Admin, Complaint Manager, Foreign Agency'
+      description: "addendum: \"adding participants to an agency thread stays restricted\"\
+        \ \u2014 enforced here as\nan outright block for Agency threads (their shape\
+        \ is fixed at exactly two participants,\nChat Thread.validate() also enforces\
+        \ this). Internal threads can grow freely between staff.\n\n**Authorized Roles:**\
+        \ Kuwait Embassy, Manager, Kuwait Telesign, Ticketer, Finance Manager, Saudi\
+        \ LMIS, Saudi Taeshir, Kuwait LMIS, Contract Parser, System Manager, Administrator,\
+        \ Clearance Officer, Saudi Embassy, Registrar, Communication Manager, Admin,\
+        \ Complaint Manager, Foreign Agency"
       operationId: add_participant
       security:
       - frappeSessionCookie: []
@@ -3604,19 +3481,14 @@ paths:
       tags:
       - 10 - Chat & Messages
       summary: Create Internal Thread
-      description: 'Internal staff only — "internal chat is open between all staff,
-        no role restriction,"
-
-        but never a route into an agency''s thread (validate_thread_participants blocks
-        a Foreign
-
-        Agency target here just as it blocks one as the requester elsewhere).
-
-
-        **Authorized Roles:** Kuwait Embassy, Manager, Kuwait Telesign, Ticketer,
-        Finance Manager, Saudi LMIS, Saudi Taeshir, Kuwait LMIS, Contract Parser,
-        System Manager, Administrator, Clearance Officer, Saudi Embassy, Registrar,
-        Communication Manager, Admin, Complaint Manager, Foreign Agency'
+      description: "Internal staff only \u2014 \"internal chat is open between all\
+        \ staff, no role restriction,\"\nbut never a route into an agency's thread\
+        \ (validate_thread_participants blocks a Foreign\nAgency target here just\
+        \ as it blocks one as the requester elsewhere).\n\n**Authorized Roles:** Kuwait\
+        \ Embassy, Manager, Kuwait Telesign, Ticketer, Finance Manager, Saudi LMIS,\
+        \ Saudi Taeshir, Kuwait LMIS, Contract Parser, System Manager, Administrator,\
+        \ Clearance Officer, Saudi Embassy, Registrar, Communication Manager, Admin,\
+        \ Complaint Manager, Foreign Agency"
       operationId: create_internal_thread
       security:
       - frappeSessionCookie: []
@@ -3718,28 +3590,17 @@ paths:
       tags:
       - 10 - Chat & Messages
       summary: List Threads
-      description: 'addendum: "Agencies cannot know other agencies exist... this needs
-        an explicit test,
-
-        not just reliance on the participant filter." Belt-and-suspenders: the participant
-        filter
-
-        alone should already be sufficient (an agency user is never a participant
-        on another
-
-        agency''s thread), but a Foreign Agency caller gets an *additional*, independent
-        filter by
-
-        their own contractor — so even a hypothetical bug that let a stray participant
-        row through
-
-        still couldn''t leak another agency''s thread to this endpoint.
-
-
-        **Authorized Roles:** Kuwait Embassy, Manager, Kuwait Telesign, Ticketer,
-        Finance Manager, Saudi LMIS, Saudi Taeshir, Kuwait LMIS, Contract Parser,
-        System Manager, Administrator, Clearance Officer, Saudi Embassy, Registrar,
-        Communication Manager, Admin, Complaint Manager, Foreign Agency'
+      description: "addendum: \"Agencies cannot know other agencies exist... this\
+        \ needs an explicit test,\nnot just reliance on the participant filter.\"\
+        \ Belt-and-suspenders: the participant filter\nalone should already be sufficient\
+        \ (an agency user is never a participant on another\nagency's thread), but\
+        \ a Foreign Agency caller gets an *additional*, independent filter by\ntheir\
+        \ own contractor \u2014 so even a hypothetical bug that let a stray participant\
+        \ row through\nstill couldn't leak another agency's thread to this endpoint.\n\
+        \n**Authorized Roles:** Kuwait Embassy, Manager, Kuwait Telesign, Ticketer,\
+        \ Finance Manager, Saudi LMIS, Saudi Taeshir, Kuwait LMIS, Contract Parser,\
+        \ System Manager, Administrator, Clearance Officer, Saudi Embassy, Registrar,\
+        \ Communication Manager, Admin, Complaint Manager, Foreign Agency"
       operationId: list_threads
       security:
       - frappeSessionCookie: []
@@ -3946,14 +3807,11 @@ paths:
       tags:
       - 11 - Notifications
       summary: Subscribe To Push
-      description: 'A user subscribing their own browser — never on behalf of anyone
-        else.
-
-
-        **Authorized Roles:** Kuwait Embassy, Manager, Kuwait Telesign, Ticketer,
-        Finance Manager, Saudi LMIS, Saudi Taeshir, Kuwait LMIS, Contract Parser,
-        System Manager, Administrator, Clearance Officer, Saudi Embassy, Registrar,
-        Communication Manager, Admin, Complaint Manager, Foreign Agency'
+      description: "A user subscribing their own browser \u2014 never on behalf of\
+        \ anyone else.\n\n**Authorized Roles:** Kuwait Embassy, Manager, Kuwait Telesign,\
+        \ Ticketer, Finance Manager, Saudi LMIS, Saudi Taeshir, Kuwait LMIS, Contract\
+        \ Parser, System Manager, Administrator, Clearance Officer, Saudi Embassy,\
+        \ Registrar, Communication Manager, Admin, Complaint Manager, Foreign Agency"
       operationId: subscribe_to_push
       security:
       - frappeSessionCookie: []
@@ -4007,16 +3865,12 @@ paths:
       tags:
       - 11 - Notifications
       summary: Trigger Wakala Reminder
-      description: 'business-workflow-srs.md: "plus staff can trigger a reminder manually
-        any time" — the
-
-        escape hatch alongside the automatic Fri/Sat/Sun watchdog.
-
-
-        **Authorized Roles:** Kuwait Embassy, Manager, Kuwait Telesign, Ticketer,
-        Finance Manager, Saudi LMIS, Saudi Taeshir, Kuwait LMIS, Contract Parser,
-        System Manager, Administrator, Clearance Officer, Saudi Embassy, Registrar,
-        Communication Manager, Admin, Complaint Manager, Foreign Agency'
+      description: "business-workflow-srs.md: \"plus staff can trigger a reminder\
+        \ manually any time\" \u2014 the\nescape hatch alongside the automatic Fri/Sat/Sun\
+        \ watchdog.\n\n**Authorized Roles:** Kuwait Embassy, Manager, Kuwait Telesign,\
+        \ Ticketer, Finance Manager, Saudi LMIS, Saudi Taeshir, Kuwait LMIS, Contract\
+        \ Parser, System Manager, Administrator, Clearance Officer, Saudi Embassy,\
+        \ Registrar, Communication Manager, Admin, Complaint Manager, Foreign Agency"
       operationId: trigger_wakala_reminder
       security:
       - frappeSessionCookie: []
@@ -4259,26 +4113,14 @@ paths:
       tags:
       - 13 - Reports & Analytics
       summary: Get Complaint Aging Report
-      description: 'business-workflow-srs.md Part 5: "how many are new, how many are
-        still open and for how
-
-        long, how many resolved" — "still open" (Unresolved) is explicitly meant to
-        surface aging,
-
-        not just a count, so each Unresolved complaint''s age in days is returned
-        individually
-
-        (sorted oldest-first, same as list_unresolved_complaints) rather than collapsed
-        into an
-
-        average that would hide exactly the "forgotten at the bottom of the list"
-        case the spec
-
-        cares about.
-
-
-        **Authorized Roles:** Manager, Finance Manager, System Manager, Administrator,
-        Admin'
+      description: "business-workflow-srs.md Part 5: \"how many are new, how many\
+        \ are still open and for how\nlong, how many resolved\" \u2014 \"still open\"\
+        \ (Unresolved) is explicitly meant to surface aging,\nnot just a count, so\
+        \ each Unresolved complaint's age in days is returned individually\n(sorted\
+        \ oldest-first, same as list_unresolved_complaints) rather than collapsed\
+        \ into an\naverage that would hide exactly the \"forgotten at the bottom of\
+        \ the list\" case the spec\ncares about.\n\n**Authorized Roles:** Manager,\
+        \ Finance Manager, System Manager, Administrator, Admin"
       operationId: get_complaint_aging_report
       security:
       - frappeSessionCookie: []
@@ -4475,16 +4317,11 @@ paths:
       tags:
       - 13 - Reports & Analytics
       summary: Get Financial Overview
-      description: 'Part F: "report_api.py gains get_financial_overview (Admin-only)"
-        — deliberately not
-
-        Manager, unlike every other report here (the financial visibility wall from
-        Step 8 applies
-
-        to reporting too, not just the raw ledger).
-
-
-        **Authorized Roles:** Admin, Manager, Finance Manager, System Manager, Administrator'
+      description: "Part F: \"report_api.py gains get_financial_overview (Admin-only)\"\
+        \ \u2014 deliberately not\nManager, unlike every other report here (the financial\
+        \ visibility wall from Step 8 applies\nto reporting too, not just the raw\
+        \ ledger).\n\n**Authorized Roles:** Admin, Manager, Finance Manager, System\
+        \ Manager, Administrator"
       operationId: get_financial_overview
       security:
       - frappeSessionCookie: []
@@ -4688,25 +4525,14 @@ paths:
       tags:
       - 13 - Reports & Analytics
       summary: Get Staff Performance Report
-      description: '"The same breakdown per individual staff member — how much each
-        person handled in a
-
-        given period." Grouped by whoever actually did the work (CV Record.generated_by,
-
-        Clearance Step.completed_by, Process Event.actor for placement-stage transitions)
-        —
-
-        deliberately not attempting to attribute "medicals processed" per staff member,
-        since
-
-        nothing in this build records who recorded a medical result; inventing an
-        attribution here
-
-        would be a guess dressed up as data.
-
-
-        **Authorized Roles:** Manager, Finance Manager, System Manager, Administrator,
-        Admin'
+      description: "\"The same breakdown per individual staff member \u2014 how much\
+        \ each person handled in a\ngiven period.\" Grouped by whoever actually did\
+        \ the work (CV Record.generated_by,\nClearance Step.completed_by, Process\
+        \ Event.actor for placement-stage transitions) \u2014\ndeliberately not attempting\
+        \ to attribute \"medicals processed\" per staff member, since\nnothing in\
+        \ this build records who recorded a medical result; inventing an attribution\
+        \ here\nwould be a guess dressed up as data.\n\n**Authorized Roles:** Manager,\
+        \ Finance Manager, System Manager, Administrator, Admin"
       operationId: get_staff_performance_report
       security:
       - frappeSessionCookie: []

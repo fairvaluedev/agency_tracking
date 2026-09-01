@@ -27,23 +27,51 @@ def _resolve_frappe_file_path(file_url):
 
 	if not file_url:
 		return None
+
+	# 1. Try File DocType
+	file_doc_name = frappe.db.get_value("File", {"file_url": file_url}, "name")
+	if file_doc_name:
+		doc = frappe.get_doc("File", file_doc_name)
+		if hasattr(doc, "get_full_path"):
+			full = doc.get_full_path()
+			if os.path.exists(full):
+				return full
+
 	clean = str(file_url).lstrip("/")
-	if clean.startswith("private/files/"):
-		path = frappe.get_site_path("private", "files", os.path.basename(clean))
+	filename = os.path.basename(clean)
+
+	candidate_paths = [
+		frappe.get_site_path("public", "files", filename),
+		frappe.get_site_path("private", "files", filename),
+		frappe.get_site_path(clean),
+		os.path.join(frappe.get_site_path(), "public", clean),
+		os.path.join(frappe.get_site_path(), "private", clean),
+	]
+	if os.path.isabs(file_url) and os.path.exists(file_url):
+		candidate_paths.insert(0, file_url)
+
+	for path in candidate_paths:
+		if path and os.path.exists(path) and os.path.isfile(path):
+			return path
+	return None
+
+
+def parse_bank_statement_csv(file_url=None, csv_content=None):
+	"""Reads a CSV with columns date, reference, amount. Supports both file_url and direct csv_content."""
+	import io
+
+	if csv_content:
+		f = io.StringIO(csv_content)
+		should_close = False
 	else:
-		path = frappe.get_site_path("public", "files", os.path.basename(clean))
-	return path if os.path.exists(path) else None
-
-
-def parse_bank_statement_csv(file_url):
-	"""Reads a CSV with columns date, reference, amount. Skips malformed rows rather than
-	failing the whole import — one bad line in a hundred shouldn't block the rest."""
-	file_path = _resolve_frappe_file_path(file_url)
-	if not file_path:
-		frappe.throw(f"Could not find statement file for {file_url}.", frappe.ValidationError)
+		file_path = _resolve_frappe_file_path(file_url)
+		if not file_path:
+			frappe.throw(f"Could not find statement file for {file_url}.", frappe.ValidationError)
+		f = open(file_path, newline="", encoding="utf-8")
+		should_close = True
 
 	rows = []
-	with open(file_path, newline="", encoding="utf-8") as f:
+	try:
 		reader = csv.DictReader(f)
 		for raw_row in reader:
 			try:
@@ -56,6 +84,9 @@ def parse_bank_statement_csv(file_url):
 				)
 			except (KeyError, ValueError, AttributeError, InvalidOperation):
 				continue
+	finally:
+		if should_close:
+			f.close()
 	return rows
 
 

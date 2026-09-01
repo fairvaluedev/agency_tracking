@@ -85,6 +85,29 @@ class TestFinanceAPI(FrappeTestCase):
 		result = log_stage_income(200, "ETB", "Walk-in registration fee", placement=placement.name)
 		self.assertEqual(result["transaction_type"], "Income")
 
+	def test_log_income_with_applicant_and_custom_stage(self):
+		manager = make_role_user("fa03b", "Manager")
+		frappe.set_user(manager.name)
+		applicant = frappe.get_doc({
+			"doctype": "Applicant",
+			"first_name": "Test",
+			"last_name": "Applicant",
+			"gender": "Female",
+			"status": "Draft",
+		}).insert(ignore_permissions=True)
+
+		result = log_stage_income(
+			amount=500,
+			currency="ETB",
+			description="Registration Fee",
+			applicant=applicant.name,
+			stage="Registered",
+		)
+		self.assertEqual(result["transaction_type"], "Income")
+		self.assertEqual(result["applicant"], applicant.name)
+		self.assertEqual(result["stage_logged_at"], "Registered")
+		self.assertEqual(result["description"], "Registration Fee")
+
 	def test_non_finance_role_sees_only_own_rows(self):
 		# 2026-08-29: no longer a hard "1=0" for everyone but Finance Manager/Admin -- staff
 		# can see their own logged rows, just not everyone else's.

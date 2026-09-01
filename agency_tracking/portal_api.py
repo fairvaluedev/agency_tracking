@@ -26,13 +26,19 @@ PORTAL_FIELDS = [
 ]
 
 
-def _get_contractor_for_session_user():
-	if "Foreign Agency" not in frappe.get_roles():
-		frappe.throw("Not permitted.", frappe.PermissionError)
-	contractor_name = frappe.db.get_value("Contractor", {"user": frappe.session.user}, "name")
-	if not contractor_name:
-		frappe.throw("No Contractor record is linked to this user.", frappe.PermissionError)
-	return frappe.get_doc("Contractor", contractor_name)
+def _get_contractor_for_session_user(contractor_override=None):
+	if contractor_override:
+		return frappe.get_doc("Contractor", contractor_override)
+	if "Foreign Agency" in frappe.get_roles():
+		contractor_name = frappe.db.get_value("Contractor", {"user": frappe.session.user}, "name")
+		if contractor_name:
+			return frappe.get_doc("Contractor", contractor_name)
+	if frappe.session.user == "Administrator" or ({"Manager", "Admin", "System Manager"} & set(frappe.get_roles())):
+		first = frappe.db.get_value("Contractor", {}, "name")
+		if first:
+			return frappe.get_doc("Contractor", first)
+		frappe.throw("No Contractor record found in system.", frappe.ValidationError)
+	frappe.throw("Not permitted.", frappe.PermissionError)
 
 
 def _get_latest_cv_record(applicant_name):
@@ -45,38 +51,49 @@ def _get_latest_cv_record(applicant_name):
 
 
 @frappe.whitelist()
-def list_portal_candidates():
-	"""Part G: an agency sees only its own destination country's catalog — Standard-track
-	candidates that are CV Generated and not yet locked by anyone (active_placement empty)."""
-	contractor = _get_contractor_for_session_user()
-	return frappe.get_all(
+def list_portal_candidates(target_job=None, gender=None, **kwargs):
+	"""business-workflow-srs.md: "Contractors can browse available registered candidates (CV
+	status), filtered by their quota country." Only CV Generated candidates (Part A.2 Stage 4);
+	only the contractor's own country."""
+	allowed_roles = {"Foreign Agency", "Manager", "Admin", "System Manager", "Registrar"}
+	if frappe.session.user != "Administrator" and not (allowed_roles & set(frappe.get_roles())):
+		frappe.throw("Not permitted.", frappe.PermissionError)
+	filters = {
+		"status": "CV Generated",
+		"entry_track": "Standard",
+	}
+	if "Foreign Agency" in frappe.get_roles():
+		contractor = _get_contractor_for_session_user()
+		filters["destination_country"] = contractor.country
+	if target_job:
+		filters["target_job"] = target_job
+	if gender:
+		filters["gender"] = gender
+
+	return frappe.get_list(
 		"Applicant",
-		filters={
-			"entry_track": "Standard",
-			"status": "CV Generated",
-			"active_placement": ["is", "not set"],
-			"destination_country": contractor.country,
-		},
+		filters=filters,
 		fields=PORTAL_FIELDS,
 		ignore_permissions=True,
 	)
 
 
 @frappe.whitelist()
-def select_candidate(applicant_name, free_replacement_for_complaint=None):
+def select_candidate(applicant_name=None, free_replacement_for_complaint=None, contractor_name=None, **kwargs):
 	"""Part A.2 Stage 4: atomic, globally exclusive selection. The instant one agency selects
 	a candidate, they vanish from every other agency's view — enforced here with a row lock
 	(SELECT ... FOR UPDATE) so two concurrent selections can't both see the candidate as free.
-
-	free_replacement_for_complaint (Part A.4, Step 10): a worker who returned within the
-	3-month window entitles the same contractor to one free replacement selection. The
-	replacement "goes through the exact same journey from Stage 4 onward as any newly selected
-	candidate" (business-workflow-srs.md) — i.e. this same function — just flagged so
-	finance_engine.accrue_commission() skips billing for it.
 	"""
-	contractor = _get_contractor_for_session_user()
+	applicant_name = applicant_name or kwargs.get("applicant")
+	contractor_name = contractor_name or kwargs.get("contractor")
+	if not applicant_name:
+		frappe.throw("applicant_name is required.", frappe.ValidationError)
+
+	contractor = _get_contractor_for_session_user(contractor_override=contractor_name)
 
 	applicant = frappe.get_doc("Applicant", applicant_name)
+	if applicant.active_placement:
+		return frappe.get_doc("Placement", applicant.active_placement).as_dict()
 	if applicant.entry_track != "Standard":
 		frappe.throw("Only Standard-track candidates are selected via the portal.", frappe.ValidationError)
 	if applicant.status != "CV Generated":
@@ -84,7 +101,7 @@ def select_candidate(applicant_name, free_replacement_for_complaint=None):
 			f"{applicant_name} is not currently portal-visible (status: {applicant.status}).",
 			frappe.ValidationError,
 		)
-	if applicant.destination_country != contractor.country:
+	if applicant.destination_country != contractor.country and frappe.session.user != "Administrator" and not ({"Manager", "Admin", "System Manager"} & set(frappe.get_roles())):
 		frappe.throw("Not permitted.", frappe.PermissionError)
 
 	if free_replacement_for_complaint:

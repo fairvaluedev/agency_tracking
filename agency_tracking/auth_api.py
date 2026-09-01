@@ -12,9 +12,9 @@
 import frappe
 
 
-@frappe.whitelist()
+@frappe.whitelist(allow_guest=True)
 def get_csrf_token():
-	return frappe.sessions.get_csrf_token()
+	return {"csrf_token": frappe.sessions.get_csrf_token()}
 
 
 @frappe.whitelist(allow_guest=True)

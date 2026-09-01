@@ -39,7 +39,9 @@ INTERNAL_STAFF_ROLES = {
 	MANAGER,
 	ADMIN,
 	CONTRACT_PARSER,
+	"Administrator",
+	"System Manager",
 } | CLEARANCE_COUNTRY_ROLES
 
 # Roles that see cross-cutting management reports (report_api.py's Manager-tier functions).
-MANAGEMENT_ROLES = {MANAGER, ADMIN}
+MANAGEMENT_ROLES = {MANAGER, ADMIN, "Administrator", "System Manager", FINANCE_MANAGER}

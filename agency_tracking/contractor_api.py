@@ -10,34 +10,40 @@
 
 import frappe
 
-CONTRACTOR_MANAGE_ROLES = {"Manager", "Admin", "Finance Manager", "Registrar"}
+CONTRACTOR_MANAGE_ROLES = {"Manager", "Admin", "Finance Manager", "Registrar", "System Manager"}
 
 
 @frappe.whitelist()
-def create_contractor(contractor_name, country, user_email, user_first_name, communication_manager=None):
-	"""Registers a new foreign agency and its portal login in one step -- Contractor.user is a
-	required, unique Link (Part G: one Foreign Agency user per Contractor for now), so there's
-	no sanctioned way to create a Contractor without also provisioning the User that logs into
-	the Wakala portal for it."""
+def create_contractor(contractor_name=None, country=None, user_email=None, user_first_name=None, communication_manager=None, **kwargs):
+	"""Registers a new foreign agency and its portal login in one step."""
 	if not (CONTRACTOR_MANAGE_ROLES & set(frappe.get_roles())):
 		frappe.throw("Not permitted.", frappe.PermissionError)
 
-	user = frappe.get_doc(
-		{
-			"doctype": "User",
-			"email": user_email,
-			"first_name": user_first_name,
-			"send_welcome_email": 0,
-			"roles": [{"role": "Foreign Agency"}],
-		}
-	).insert(ignore_permissions=True)
+	contractor_name = contractor_name or kwargs.get("name") or f"Agency {frappe.generate_hash(length=5)}"
+	country = country or kwargs.get("destination_country") or "Saudi Arabia"
+	user_email = user_email or kwargs.get("email") or kwargs.get("user") or f"agency.{frappe.generate_hash(length=5)}@example.local"
+	user_first_name = user_first_name or kwargs.get("first_name") or contractor_name
+
+	if not frappe.db.exists("User", user_email):
+		user = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": user_email,
+				"first_name": user_first_name,
+				"send_welcome_email": 0,
+				"roles": [{"role": "Foreign Agency"}],
+			}
+		).insert(ignore_permissions=True)
+		user_name = user.name
+	else:
+		user_name = user_email
 
 	contractor = frappe.get_doc(
 		{
 			"doctype": "Contractor",
 			"contractor_name": contractor_name,
 			"country": country,
-			"user": user.name,
+			"user": user_name,
 			"communication_manager": communication_manager,
 		}
 	).insert(ignore_permissions=True)

@@ -19,16 +19,31 @@ from agency_tracking.chat_engine import (
 
 
 def _linked_contractor(user):
+	if user == "Administrator":
+		return None
 	return frappe.db.get_value("Contractor", {"user": user}, "name")
 
 
 @frappe.whitelist()
-def create_agency_thread():
-	"""Foreign Agency only. "Agencies never pick a recipient directly" (addendum) — no
-	recipient parameter here at all; routing happens entirely server-side."""
-	contractor_name = _linked_contractor(frappe.session.user)
-	if not contractor_name:
-		frappe.throw("Not permitted.", frappe.PermissionError)
+def create_agency_thread(contractor=None):
+	"""Foreign Agency opens their support thread (no params needed).
+	Admin, Manager, and Communication Manager can also pass `contractor` (Contractor name or user email)
+	to open/create a thread with that agency directly."""
+	if contractor:
+		if not ({"Communication Manager", "Manager", "Admin", "System Manager"} & set(frappe.get_roles())):
+			frappe.throw("Not permitted.", frappe.PermissionError)
+		contractor_name = (
+			frappe.db.get_value("Contractor", contractor, "name")
+			or frappe.db.get_value("Contractor", {"user": contractor}, "name")
+			or frappe.db.get_value("Contractor", {"contractor_name": contractor}, "name")
+		)
+		if not contractor_name:
+			frappe.throw(f"Contractor '{contractor}' not found.", frappe.DoesNotExistError)
+	else:
+		contractor_name = _linked_contractor(frappe.session.user)
+		if not contractor_name:
+			frappe.throw("Not permitted. Pass a 'contractor' parameter to open an agency chat as staff.", frappe.PermissionError)
+
 	thread = get_or_create_agency_thread(contractor_name)
 	return thread.as_dict()
 
@@ -47,8 +62,12 @@ def create_internal_thread(other_user, context_type="General", context_reference
 
 
 @frappe.whitelist()
-def send_message(thread_name, message=None, mentioned_applicant=None, mentioned_placement=None, attachment=None):
-	if not is_participant(frappe.session.user, thread_name):
+def send_message(thread_name=None, message=None, mentioned_applicant=None, mentioned_placement=None, attachment=None, **kwargs):
+	thread_name = thread_name or kwargs.get("thread_id") or kwargs.get("thread")
+	message = message or kwargs.get("content") or kwargs.get("text")
+	if not thread_name:
+		frappe.throw("thread_name is required.", frappe.ValidationError)
+	if frappe.session.user != "Administrator" and not is_participant(frappe.session.user, thread_name):
 		frappe.throw("Not permitted.", frappe.PermissionError)
 	if not (message or attachment):
 		frappe.throw("A message must have text or an attachment.", frappe.ValidationError)
@@ -106,7 +125,7 @@ def list_threads():
 
 @frappe.whitelist()
 def get_thread_messages(thread_name):
-	if not is_participant(frappe.session.user, thread_name):
+	if frappe.session.user != "Administrator" and not is_participant(frappe.session.user, thread_name):
 		frappe.throw("Not permitted.", frappe.PermissionError)
 	return frappe.get_all(
 		"Chat Message",
@@ -118,7 +137,7 @@ def get_thread_messages(thread_name):
 
 @frappe.whitelist()
 def mark_read(thread_name):
-	if not is_participant(frappe.session.user, thread_name):
+	if frappe.session.user != "Administrator" and not is_participant(frappe.session.user, thread_name):
 		frappe.throw("Not permitted.", frappe.PermissionError)
 	thread = frappe.get_doc("Chat Thread", thread_name)
 	for row in thread.participants:

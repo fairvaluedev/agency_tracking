@@ -15,13 +15,17 @@ def _require_finance_role():
 
 
 @frappe.whitelist()
-def upload_bank_statement(file_url):
+def upload_bank_statement(file_url=None, url=None, file=None, statement_file=None, csv_content=None, **kwargs):
 	_require_finance_role()
-	rows = parse_bank_statement_csv(file_url)
+	file_url = file_url or url or file or statement_file or kwargs.get("file_url")
+	csv_content = csv_content or kwargs.get("content")
+	if not file_url and not csv_content:
+		frappe.throw("file_url or csv_content is required.", frappe.ValidationError)
+	rows = parse_bank_statement_csv(file_url=file_url, csv_content=csv_content)
 	statement = frappe.get_doc(
 		{
 			"doctype": "Bank Statement",
-			"statement_file": file_url,
+			"statement_file": file_url or "direct-input.csv",
 			"uploaded_by": frappe.session.user,
 			"status": "Uploaded",
 			"lines": rows,
@@ -32,11 +36,15 @@ def upload_bank_statement(file_url):
 
 
 @frappe.whitelist()
-def manually_match_line(statement_line_name, batch_name):
+def manually_match_line(statement_line_name=None, batch_name=None, line_name=None, batch=None, **kwargs):
 	"""Escape hatch for lines the automatic matcher couldn't confidently resolve (ambiguous
 	amount collisions, missing reference text) — Finance Manager/Admin only, same shape as
 	every other manual-override path in this build."""
 	_require_finance_role()
+	statement_line_name = statement_line_name or line_name or kwargs.get("statement_line")
+	batch_name = batch_name or batch or kwargs.get("batch_name")
+	if not statement_line_name or not batch_name:
+		frappe.throw("Both statement_line_name and batch_name are required.", frappe.ValidationError)
 	line = frappe.get_doc("Bank Statement Line", statement_line_name)
 	line.matched_batch = batch_name
 	line.match_status = "Manually Matched"

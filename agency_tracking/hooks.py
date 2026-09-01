@@ -64,6 +64,11 @@ app_license = "mit"
 # 	"Role": "home_page"
 # }
 
+website_route_rules = [
+	{"from_route": "/swagger", "to_route": "docs"},
+	{"from_route": "/api-docs", "to_route": "docs"},
+]
+
 # Generators
 # ----------
 

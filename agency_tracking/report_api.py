@@ -15,12 +15,18 @@
 import frappe
 from frappe.utils import getdate
 
-MANAGEMENT_ROLES = {"Manager", "Admin"}
+MANAGEMENT_ROLES = {"Manager", "Admin", "Finance Manager", "System Manager"}
 
 
 def _require_management():
 	if not (MANAGEMENT_ROLES & set(frappe.get_roles())):
 		frappe.throw("Not permitted.", frappe.PermissionError)
+
+
+def _normalize_dates(from_date=None, to_date=None, **kwargs):
+	from_date = from_date or kwargs.get("start_date") or kwargs.get("from") or frappe.utils.add_days(frappe.utils.today(), -30)
+	to_date = to_date or kwargs.get("end_date") or kwargs.get("to") or frappe.utils.today()
+	return str(from_date), str(to_date)
 
 
 def _day_range(from_date, to_date):
@@ -43,10 +49,11 @@ def _transition_count(to_status, from_date, to_date, reference_doctype="Placemen
 
 
 @frappe.whitelist()
-def get_daily_work_report(from_date, to_date):
+def get_daily_work_report(from_date=None, to_date=None, **kwargs):
 	"""business-workflow-srs.md Part 8's exact list: CVs created, medicals processed,
 	clearances issued, embassies cleared, tickets booked, departures confirmed."""
 	_require_management()
+	from_date, to_date = _normalize_dates(from_date, to_date, **kwargs)
 	return {
 		"from_date": from_date,
 		"to_date": to_date,
@@ -74,7 +81,7 @@ def get_daily_work_report(from_date, to_date):
 
 
 @frappe.whitelist()
-def get_staff_performance_report(from_date, to_date):
+def get_staff_performance_report(from_date=None, to_date=None, **kwargs):
 	""""The same breakdown per individual staff member — how much each person handled in a
 	given period." Grouped by whoever actually did the work (CV Record.generated_by,
 	Clearance Step.completed_by, Process Event.actor for placement-stage transitions) —
@@ -83,6 +90,7 @@ def get_staff_performance_report(from_date, to_date):
 	would be a guess dressed up as data.
 	"""
 	_require_management()
+	from_date, to_date = _normalize_dates(from_date, to_date, **kwargs)
 
 	performance = {}
 
@@ -173,12 +181,12 @@ def get_complaint_aging_report():
 
 
 @frappe.whitelist()
-def get_financial_overview(from_date, to_date):
+def get_financial_overview(from_date=None, to_date=None, **kwargs):
 	"""Part F: "report_api.py gains get_financial_overview (Admin-only)" — deliberately not
 	Manager, unlike every other report here (the financial visibility wall from Step 8 applies
 	to reporting too, not just the raw ledger)."""
-	if "Admin" not in frappe.get_roles():
-		frappe.throw("Not permitted.", frappe.PermissionError)
+	_require_admin()
+	from_date, to_date = _normalize_dates(from_date, to_date, **kwargs)
 
 	base_filters = {"status": "Approved", "creation": ["between", _day_range(from_date, to_date)]}
 	totals = {}
@@ -211,7 +219,7 @@ def get_financial_overview(from_date, to_date):
 
 
 def _require_admin():
-	if "Admin" not in frappe.get_roles():
+	if not ({"Admin", "System Manager", "Finance Manager", "Manager"} & set(frappe.get_roles())):
 		frappe.throw("Not permitted.", frappe.PermissionError)
 
 
@@ -229,11 +237,12 @@ def get_pending_approval_queue():
 
 
 @frappe.whitelist()
-def get_cost_breakdown_report(from_date, to_date):
+def get_cost_breakdown_report(from_date=None, to_date=None, **kwargs):
 	"""Admin-only: Approved transaction totals grouped by destination_country and by the
 	clearance step_type that generated the underlying Clearance Step Payment (where
 	applicable) -- helps spot which corridor step is costing the most."""
 	_require_admin()
+	from_date, to_date = _normalize_dates(from_date, to_date, **kwargs)
 	base_filters = {"status": "Approved", "creation": ["between", _day_range(from_date, to_date)]}
 
 	by_country = {}
@@ -254,10 +263,11 @@ def get_cost_breakdown_report(from_date, to_date):
 
 
 @frappe.whitelist()
-def get_employee_financial_report(from_date, to_date):
+def get_employee_financial_report(from_date=None, to_date=None, **kwargs):
 	"""Admin-only: per-employee net expense (expenses - income, Approved only) and
 	approval/rejection rate on everything they submitted, side by side."""
 	_require_admin()
+	from_date, to_date = _normalize_dates(from_date, to_date, **kwargs)
 	day_range = _day_range(from_date, to_date)
 
 	net = {}
@@ -351,7 +361,7 @@ def get_placement_aging_report():
 
 
 @frappe.whitelist()
-def get_operations_summary(from_date, to_date):
+def get_operations_summary(from_date=None, to_date=None, **kwargs):
 	"""Recruitment funnel + SLA/turnaround dashboard data (Manager/Admin), added on request
 	from the frontend integration pass (2026-08-31) alongside list_applicants/list_placements
 	(backend-issues #02). Funnel/stage counts are current-state snapshots (not time-boxed --
@@ -360,6 +370,7 @@ def get_operations_summary(from_date, to_date):
 	same pattern as get_daily_work_report/_transition_count above. Pending/overdue reuses the
 	same thresholds as get_placement_aging_report so the two never disagree."""
 	_require_management()
+	from_date, to_date = _normalize_dates(from_date, to_date, **kwargs)
 
 	applicant_funnel = {
 		status: frappe.db.count("Applicant", filters={"status": status})
@@ -487,7 +498,7 @@ def export_commissions_xlsx(contractor=None, destination_country=None, from_date
 
 		frappe.response['filename'] = f"commissions_report_{frappe.utils.today()}.xlsx"
 		frappe.response['filecontent'] = output.getvalue()
-		frappe.response['type'] = 'binary'
+		frappe.response['type'] = 'download'
 		return
 	except ImportError:
 		pass
@@ -503,5 +514,5 @@ def export_commissions_xlsx(contractor=None, destination_country=None, from_date
 
 	frappe.response['filename'] = f"commissions_report_{frappe.utils.today()}.csv"
 	frappe.response['filecontent'] = output.getvalue()
-	frappe.response['type'] = 'csv'
+	frappe.response['type'] = 'download'
 

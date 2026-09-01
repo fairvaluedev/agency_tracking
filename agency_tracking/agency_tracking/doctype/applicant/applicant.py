@@ -88,6 +88,8 @@ class Applicant(Document):
 		convenience, never blocks the save (see passport_parser.parse_passport_mrz)."""
 		if not (self.passport_scan and self.has_value_changed("passport_scan")):
 			return
+		if self.passport_number and self.date_of_birth:
+			return
 		try:
 			from agency_tracking.passport_parser import parse_passport_mrz
 
