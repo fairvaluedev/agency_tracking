@@ -25,12 +25,13 @@ def _linked_contractor(user):
 
 
 @frappe.whitelist()
-def create_agency_thread(contractor=None):
+def create_agency_thread(contractor=None, **kwargs):
 	"""Foreign Agency opens their support thread (no params needed).
 	Admin, Manager, and Communication Manager can also pass `contractor` (Contractor name or user email)
 	to open/create a thread with that agency directly."""
+	contractor = contractor or kwargs.get("contractor_name") or kwargs.get("agency") or kwargs.get("agency_name")
 	if contractor:
-		if not ({"Communication Manager", "Manager", "Admin", "System Manager"} & set(frappe.get_roles())):
+		if frappe.session.user != "Administrator" and not ({"Communication Manager", "Manager", "Admin", "System Manager"} & set(frappe.get_roles())):
 			frappe.throw("Not permitted.", frappe.PermissionError)
 		contractor_name = (
 			frappe.db.get_value("Contractor", contractor, "name")
@@ -49,10 +50,17 @@ def create_agency_thread(contractor=None):
 
 
 @frappe.whitelist()
-def create_internal_thread(other_user, context_type="General", context_reference=None):
+def create_internal_thread(other_user=None, context_type="General", context_reference=None, **kwargs):
 	"""Internal staff only — "internal chat is open between all staff, no role restriction,"
 	but never a route into an agency's thread (validate_thread_participants blocks a Foreign
 	Agency target here just as it blocks one as the requester elsewhere)."""
+	other_user = other_user or kwargs.get("user") or kwargs.get("user_email") or kwargs.get("target_user") or kwargs.get("recipient") or kwargs.get("with_user")
+	context_type = context_type or kwargs.get("type") or "General"
+	context_reference = context_reference or kwargs.get("reference") or kwargs.get("docname") or kwargs.get("applicant") or kwargs.get("placement")
+
+	if not other_user:
+		frappe.throw("'other_user' (or 'user') is required.", frappe.ValidationError)
+
 	if _linked_contractor(frappe.session.user):
 		frappe.throw(
 			"Agencies use create_agency_thread(), not create_internal_thread().", frappe.PermissionError
