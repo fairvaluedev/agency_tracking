@@ -10,7 +10,7 @@ class ChatThread(Document):
 		if self.thread_type == "Agency":
 			self.validate_agency_thread_shape()
 		for row in self.participants:
-			if "Foreign Agency" in frappe.get_roles(row.user) and self.thread_type != "Agency":
+			if row.user != "Administrator" and "Foreign Agency" in frappe.get_roles(row.user) and self.thread_type != "Agency":
 				frappe.throw(
 					"A Foreign Agency user can only be a participant in an Agency-type thread.",
 					frappe.ValidationError,

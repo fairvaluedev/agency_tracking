@@ -124,7 +124,10 @@ def list_threads():
 
 
 @frappe.whitelist()
-def get_thread_messages(thread_name):
+def get_thread_messages(thread_name=None, **kwargs):
+	thread_name = thread_name or kwargs.get("thread_id") or kwargs.get("thread")
+	if not thread_name:
+		frappe.throw("thread_name is required.", frappe.ValidationError)
 	if frappe.session.user != "Administrator" and not is_participant(frappe.session.user, thread_name):
 		frappe.throw("Not permitted.", frappe.PermissionError)
 	return frappe.get_all(
@@ -136,7 +139,10 @@ def get_thread_messages(thread_name):
 
 
 @frappe.whitelist()
-def mark_read(thread_name):
+def mark_read(thread_name=None, **kwargs):
+	thread_name = thread_name or kwargs.get("thread_id") or kwargs.get("thread")
+	if not thread_name:
+		frappe.throw("thread_name is required.", frappe.ValidationError)
 	if frappe.session.user != "Administrator" and not is_participant(frappe.session.user, thread_name):
 		frappe.throw("Not permitted.", frappe.PermissionError)
 	thread = frappe.get_doc("Chat Thread", thread_name)
@@ -148,11 +154,16 @@ def mark_read(thread_name):
 
 
 @frappe.whitelist()
-def add_participant(thread_name, user):
+def add_participant(thread_name=None, user=None, **kwargs):
 	"""addendum: "adding participants to an agency thread stays restricted" — enforced here as
 	an outright block for Agency threads (their shape is fixed at exactly two participants,
 	Chat Thread.validate() also enforces this). Internal threads can grow freely between staff.
 	"""
+	thread_name = thread_name or kwargs.get("thread_id") or kwargs.get("thread")
+	user = user or kwargs.get("user_email") or kwargs.get("participant") or kwargs.get("new_user") or kwargs.get("member")
+	if not thread_name or not user:
+		frappe.throw("Both 'thread_name' and 'user' are required.", frappe.ValidationError)
+
 	thread = frappe.get_doc("Chat Thread", thread_name)
 	if thread.thread_type == "Agency":
 		frappe.throw(
