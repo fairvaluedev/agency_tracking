@@ -74,6 +74,43 @@ def list_unresolved_complaints():
 
 
 @frappe.whitelist()
+def list_new_complaints():
+	"""Freshly-raised complaints (status "New") that haven't been acknowledged yet -- the triage
+	inbox. These do NOT show up in list_unresolved_complaints (which is "New"->"Unresolved"),
+	so without this endpoint a just-logged complaint is invisible in any listing until someone
+	happens to acknowledge it. Oldest-first, same management-role gate as the other lists."""
+	allowed_roles = {"Complaint Manager", "Admin", "Manager", "System Manager"}
+	if frappe.session.user != "Administrator" and not (allowed_roles & set(frappe.get_roles())):
+		frappe.throw("Not permitted.", frappe.PermissionError)
+	return frappe.get_list(
+		"Complaint",
+		filters={"status": "New"},
+		fields=["name", "placement", "contractor", "raised_by", "worker_status_at_complaint",
+		        "description", "status", "creation"],
+		order_by="creation asc",
+	)
+
+
+@frappe.whitelist()
+def list_complaints(status=None, **kwargs):
+	"""All complaints, optionally filtered by a single status (e.g. "New", "Unresolved",
+	"Resolved"). Oldest-first. Same management-role gate. Convenience over the two status-
+	specific lists for dashboards that want the whole picture or an arbitrary status slice."""
+	allowed_roles = {"Complaint Manager", "Admin", "Manager", "System Manager"}
+	if frappe.session.user != "Administrator" and not (allowed_roles & set(frappe.get_roles())):
+		frappe.throw("Not permitted.", frappe.PermissionError)
+	status = status or kwargs.get("complaint_status")
+	filters = {"status": status} if status else {}
+	return frappe.get_list(
+		"Complaint",
+		filters=filters,
+		fields=["name", "placement", "contractor", "raised_by", "worker_status_at_complaint",
+		        "description", "status", "resolution_notes", "resolved_by", "resolved_on", "creation"],
+		order_by="creation asc",
+	)
+
+
+@frappe.whitelist()
 def acknowledge_complaint(complaint_name=None, **kwargs):
 	"""New -> Unresolved."""
 	allowed_roles = {"Complaint Manager", "Admin", "System Manager", "Manager"}

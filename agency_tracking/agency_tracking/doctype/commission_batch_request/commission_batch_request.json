@@ -15,6 +15,10 @@
   "items",
   "settlement_sec",
   "settlement_reference",
+  "advance_amount",
+  "advance_reference",
+  "advance_received_on",
+  "balance_due_birr",
   "settled_on"
  ],
  "fields": [
@@ -79,6 +83,31 @@
    "fieldname": "settlement_reference",
    "fieldtype": "Data",
    "label": "Settlement Reference"
+  },
+  {
+   "fieldname": "advance_amount",
+   "fieldtype": "Currency",
+   "label": "Advance Received (Birr)",
+   "description": "Partial amount actually received from the foreign agency against this batch, when they remit less than the full requested total. Leave 0 for a full settlement."
+  },
+  {
+   "fieldname": "advance_reference",
+   "fieldtype": "Data",
+   "label": "Advance Reference",
+   "description": "Bank/transfer reference for the advance payment."
+  },
+  {
+   "fieldname": "advance_received_on",
+   "fieldtype": "Date",
+   "label": "Advance Received On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "balance_due_birr",
+   "fieldtype": "Currency",
+   "label": "Balance Due (Birr)",
+   "read_only": 1,
+   "description": "Total minus advance received. Auto-computed."
   },
   {
    "fieldname": "settled_on",

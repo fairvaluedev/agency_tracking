@@ -4,7 +4,7 @@
 # Part F: module-scoped whitelisted functions, no raw /api/resource/* exposure.
 
 import frappe
-from frappe.utils import now, today
+from frappe.utils import flt, now, today
 
 from agency_tracking.finance_engine import (
 	accrue_commission,
@@ -226,6 +226,40 @@ def settle_batch(batch_name, settlement_reference):
 	if not ({"Finance Manager", "Admin"} & set(frappe.get_roles())):
 		frappe.throw("Not permitted.", frappe.PermissionError)
 	return settle_batch_request(batch_name, settlement_reference).as_dict()
+
+
+@frappe.whitelist()
+def record_batch_advance(batch_name=None, advance_amount=None, advance_reference=None, **kwargs):
+	"""Record a partial/advance payment received from the foreign agency against a commission
+	batch, when they remit less than the full requested total. Sets advance_amount (+ reference
+	and received-on date); the controller recomputes balance_due_birr and flips an open batch to
+	Partially Settled. Full settlement still goes through settle_batch / settle_batch_items."""
+	if not ({"Finance Manager", "Admin"} & set(frappe.get_roles())):
+		frappe.throw("Not permitted.", frappe.PermissionError)
+	batch_name = batch_name or kwargs.get("batch") or kwargs.get("name")
+	advance_amount = advance_amount if advance_amount is not None else kwargs.get("amount")
+	advance_reference = advance_reference or kwargs.get("reference")
+	if not batch_name or not frappe.db.exists("Commission Batch Request", batch_name):
+		frappe.throw("A valid batch_name is required.", frappe.ValidationError)
+	if advance_amount is None:
+		frappe.throw("advance_amount is required.", frappe.ValidationError)
+	amount = flt(advance_amount)
+	if amount <= 0:
+		frappe.throw("advance_amount must be greater than zero.", frappe.ValidationError)
+
+	batch = frappe.get_doc("Commission Batch Request", batch_name)
+	if amount > (batch.total_amount_birr or 0):
+		frappe.throw(
+			f"Advance ({amount}) cannot exceed the batch total ({batch.total_amount_birr or 0}). "
+			"Use settle_batch for a full settlement.",
+			frappe.ValidationError,
+		)
+	batch.advance_amount = amount
+	if advance_reference:
+		batch.advance_reference = advance_reference
+	batch.advance_received_on = today()
+	batch.save(ignore_permissions=True)
+	return batch.as_dict()
 
 
 @frappe.whitelist()
