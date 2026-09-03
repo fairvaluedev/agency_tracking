@@ -6,7 +6,12 @@
 import frappe
 
 from agency_tracking.contract_parser import parse_contract_file, parse_visa_file
-from agency_tracking.state_machine import assert_placement_not_terminal, lock_applicant_row, transition
+from agency_tracking.state_machine import (
+	assert_placement_not_terminal,
+	lock_applicant_row,
+	strip_lifecycle_fields,
+	transition,
+)
 
 
 def _linked_contractor_or_staff_write(placement):
@@ -34,7 +39,10 @@ def upload_contract(placement_name, file_url):
 	placement = frappe.get_doc("Placement", placement_name)
 	_linked_contractor_or_staff_write(placement)
 
-	extracted = parse_contract_file(file_url, placement.destination_country)
+	# Parsing is informational only: attach the file + fill parsed data fields, but never let
+	# it move the Placement's stage (strip_lifecycle_fields). Stage moves go through
+	# advance_placement()/transition() only. See state_machine.LIFECYCLE_FIELDS.
+	extracted = strip_lifecycle_fields(parse_contract_file(file_url, placement.destination_country))
 	placement.contract_file = file_url
 	placement.update(extracted)
 	placement.save(ignore_permissions=True)
@@ -52,7 +60,8 @@ def upload_visa(placement_name, file_url):
 		frappe.throw("Visa upload is only applicable to Kuwait placements.", frappe.ValidationError)
 	_linked_contractor_or_staff_write(placement)
 
-	extracted = parse_visa_file(file_url)
+	# Informational-only, same as upload_contract: never let parsed data advance the stage.
+	extracted = strip_lifecycle_fields(parse_visa_file(file_url))
 	placement.visa_file = file_url
 	placement.update(extracted)
 	placement.save(ignore_permissions=True)

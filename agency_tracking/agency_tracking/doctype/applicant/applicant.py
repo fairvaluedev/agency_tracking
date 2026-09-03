@@ -105,6 +105,13 @@ class Applicant(Document):
 		if not extracted:
 			return
 
+		# Passport parsing is strictly informational (button-only stage transitions): it may fill
+		# blank data fields but must never touch status/lifecycle. Belt-and-suspenders against a
+		# future MRZ regex capturing a stray "status" token -- see state_machine.LIFECYCLE_FIELDS.
+		from agency_tracking.state_machine import strip_lifecycle_fields
+
+		extracted = strip_lifecycle_fields(extracted)
+
 		# first_name/last_name is a joint condition -- only split into the pair if BOTH are
 		# currently blank, never partially overwrite one half of an already-entered name.
 		if "first_name" in extracted or "last_name" in extracted:

@@ -5,7 +5,11 @@
 
 import frappe
 
-from agency_tracking.notification_engine import register_push_subscription as _register_push_subscription
+from agency_tracking.notification_engine import (
+	ensure_vapid_keys,
+	generate_vapid_keys as _generate_vapid_keys,
+	register_push_subscription as _register_push_subscription,
+)
 from agency_tracking.watchdogs import send_wakala_reminder
 
 
@@ -14,6 +18,34 @@ def subscribe_to_push(endpoint, p256dh, auth):
 	"""A user subscribing their own browser — never on behalf of anyone else."""
 	_register_push_subscription(frappe.session.user, endpoint, p256dh, auth)
 	return {"status": "subscribed"}
+
+
+@frappe.whitelist()
+def get_vapid_public_key():
+	"""Frontend fetches the VAPID application server key to pass to PushManager.subscribe().
+	Auto-provisions the keypair on first call so push works out of the box (see
+	notification_engine.ensure_vapid_keys). Safe for any authenticated user -- the public key
+	is, by design, public."""
+	config = ensure_vapid_keys()
+	return {"vapid_public_key": config.vapid_public_key}
+
+
+@frappe.whitelist()
+def regenerate_vapid_keys():
+	"""Admin-only: force a brand-new VAPID keypair (e.g. after a suspected key leak). NOTE: this
+	invalidates every existing Push Subscription -- browsers subscribed under the old key will
+	stop receiving pushes until they re-subscribe with the new applicationServerKey. Returns the
+	new public key."""
+	frappe.only_for(("System Manager", "Administrator"))
+	public_key, private_pem = _generate_vapid_keys()
+	config = frappe.get_single("Notification Config")
+	config.vapid_public_key = public_key
+	config.vapid_private_key = private_pem
+	if not config.vapid_claims_email:
+		site = frappe.local.site if getattr(frappe.local, "site", None) else "localhost"
+		config.vapid_claims_email = f"admin@{site}"
+	config.save(ignore_permissions=True)
+	return {"vapid_public_key": public_key, "message": "VAPID keys regenerated. Existing subscriptions must re-subscribe."}
 
 
 @frappe.whitelist()

@@ -22,6 +22,33 @@ def lock_applicant_row(applicant_name):
 	frappe.db.sql("SELECT `name` FROM `tabApplicant` WHERE `name`=%s FOR UPDATE", applicant_name)
 
 
+# Fields that describe *where a record sits in its lifecycle* or *which record it is* -- never
+# something a document parser is allowed to write. Parsing (passport MRZ, contract, visa, injaz)
+# is strictly informational: it may auto-fill data fields and attach the file, but the ONLY
+# sanctioned way to move a record's stage is transition() (invoked from an explicit button/RPC
+# like register_applicant / advance_placement). Consumers of parsed data
+# (placement_api.upload_contract/upload_visa, Applicant.autofill_from_passport) run it through
+# strip_lifecycle_fields() before applying, so even if a parser regex someday captured a stray
+# "status"/"docstatus" token, it can never silently advance or mutate the lifecycle.
+LIFECYCLE_FIELDS = frozenset({
+	"status",
+	"applicant_state",
+	"docstatus",
+	"name",
+	"active_placement",
+	"departed_on",
+	"entry_track",
+})
+
+
+def strip_lifecycle_fields(data):
+	"""Return a copy of a parsed-data dict with any lifecycle/identity keys removed. No-op for
+	falsy input. Keeps document parsing informational-only (see LIFECYCLE_FIELDS)."""
+	if not data:
+		return data
+	return {k: v for k, v in data.items() if k not in LIFECYCLE_FIELDS}
+
+
 # --- Terminal-state guards (2026-08-31, cc2 QA pass findings NEW-1 / NEW-3) ---
 # A class of endpoints record an outcome via a plain doc.save() rather than transition() (they
 # don't change Placement.status themselves -- record_ticket_details, record_reschedule, the
